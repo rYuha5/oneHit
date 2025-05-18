@@ -1,34 +1,62 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI;
 using Photon.Pun;
-using Photon.Realtime;
-using TMPro;
 
 public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
 {
     public float moveSpeed = 5f;
     public float jumpForce = 10f;
+    private float defaultGravityScale;
+    public float fastFallGravityScale = 30f;
+    private bool canAttack = true;
+    public float attackCooldown = 0.5f;
 
-    public PhotonView pv;
+    private PhotonView pv;
     private Rigidbody2D rb;
-    private Animator animator;
     private CapsuleCollider2D col2D;
 
+    public SPUM_Prefabs spumPrefab;
+    public SwordController swordController;
+    public GameObject sword;
+
     private bool isGrounded = true;
-    public GameObject sword;  // 검 오브젝트 (자식으로 붙여야 함)
+    private bool canJump = true;
     private bool hasSword = true;
 
-    Vector3 curPos;
-    float curScaleX;
+    private Vector3 curPos;
+    private float curScaleX;
+    private bool isMoving = false;
+    private bool lastSentMoveState = false;
+    private float moveSyncCooldown = 0.1f;
+    private float moveSyncTimer = 0f;
+
 
     void Start()
     {
         pv = GetComponent<PhotonView>();
         rb = GetComponent<Rigidbody2D>();
-        animator = GetComponent<Animator>();
         col2D = GetComponent<CapsuleCollider2D>();
+        defaultGravityScale = rb.gravityScale;
         curScaleX = transform.localScale.x;
+        swordController = sword.GetComponent<SwordController>();
+        var hitboxTrigger = sword.GetComponentInChildren<HitboxTrigger>();
+
+        if (swordController == null)
+        {
+            Debug.LogWarning("swordController 연결 실패! R_Weapon에 SwordController가 붙었는지 확인하세요.");
+        }
+
+        if (spumPrefab != null)
+        {
+            spumPrefab.OverrideControllerInit();
+            if (!spumPrefab.allListsHaveItemsExist())
+                Debug.LogWarning("애니메이션 리스트에 비어있는 항목 있음!");
+        }
+        if (hitboxTrigger != null)
+        {
+            hitboxTrigger.ownerPhotonView = pv; // 내 PhotonView 전달
+        }
+        Debug.Log($"spumPrefab: {spumPrefab != null}");
     }
 
     void Update()
@@ -36,21 +64,72 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         if (pv.IsMine)
         {
             float h = Input.GetAxisRaw("Horizontal");
+            bool isNowMoving = (h != 0);
+
+            moveSyncTimer += Time.deltaTime;
+
+            if (isNowMoving != lastSentMoveState && moveSyncTimer >= moveSyncCooldown)
+            {
+                lastSentMoveState = isNowMoving;
+                moveSyncTimer = 0f;
+
+                pv.RPC("SyncMoveState", RpcTarget.Others, isNowMoving);
+                spumPrefab.PlayAnimation(isNowMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
+            }
             rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
             curPos = transform.position;
 
-            if (h != 0)
+            isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
+            if (isGrounded && !canJump) canJump = true;
+
+            if (!isGrounded && Mathf.Abs(h) == 0)
             {
-                animator.SetBool("1_Move", true);
-                float direction = h > 0 ? -1f : 1f;
-                if (transform.localScale.x != direction)
-                {
-                    pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, direction);
-                }
+                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+            }
+
+            if (h > 0)
+            {
+                pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, -1f);
+                spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
+            }
+            else if (h < 0)
+            {
+                pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, 1f);
+                spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
+            }
+
+            if (h == 0 && isGrounded)
+            {
+                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+            }
+
+            if (Input.GetKey(KeyCode.DownArrow) && !isGrounded)
+            {
+                rb.gravityScale = fastFallGravityScale;
             }
             else
             {
-                animator.SetBool("1_Move", false);
+                rb.gravityScale = defaultGravityScale;
+            }
+
+            if (Input.GetKeyDown(KeyCode.UpArrow) && isGrounded && canJump)
+            {
+                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+                canJump = false;
+                Jump();
+                pv.RPC("JumpRPC", RpcTarget.Others);
+            }
+
+            if (Input.GetKeyDown(KeyCode.Z) && canAttack)
+            {
+                canAttack = false;
+                if (spumPrefab != null)
+                    spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
+
+                photonView.RPC("PlayAttack", RpcTarget.Others);
+                swordController?.StartAttack(); // 히트박스 실행
+
+                StartCoroutine(ResetAttackCooldown());
             }
         }
         else
@@ -66,20 +145,51 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         }
     }
 
+    IEnumerator ResetAttackCooldown()
+    {
+        yield return new WaitForSeconds(attackCooldown);
+        canAttack = true;
+    }
+
+    void Jump()
+    {
+        rb.velocity = new Vector2(rb.velocity.x, 0f);
+        rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
+    }
+
     [PunRPC]
     void FlipScaleRPC(float direction)
     {
+        float absX = Mathf.Abs(transform.localScale.x);
         Vector3 scale = transform.localScale;
-        scale.x = direction;
+        scale.x = direction > 0 ? absX : -absX;
         transform.localScale = scale;
-        curScaleX = direction;
+        curScaleX = scale.x;
+    }
+
+    [PunRPC]
+    void SyncMoveState(bool isMoving)
+    {
+        if (!pv.IsMine)
+        {
+            spumPrefab.PlayAnimation(isMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
+        }
     }
 
     [PunRPC]
     void JumpRPC()
     {
-        rb.velocity = Vector2.zero;
-        rb.AddForce(Vector2.up * 700);
+        if (!pv.IsMine) Jump();
+    }
+
+    [PunRPC]
+    void PlayAttack()
+    {
+        if (spumPrefab != null)
+        {
+            spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
+        }
+        swordController?.StartAttack();
     }
 
     [PunRPC]
@@ -90,6 +200,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         curPos = newPos;
         rb.velocity = Vector2.zero;
     }
+
+    [PunRPC]
+    //public void TakeDamage()
+    //{
+    //    Debug.Log("피격당함!");
+    //    spumPrefab.PlayAnimation(PlayerState.DAMAGED, 0);
+
+    //    // hp--; if (hp <= 0) Die();
+    //}
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {

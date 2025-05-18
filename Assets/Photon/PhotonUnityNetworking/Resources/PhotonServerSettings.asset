@@ -48,6 +48,10 @@ MonoBehaviour:
   - StartCountdown
   - SetPositionToSpawn
   - ForceSetPositionRPC
+  - PlayAttack
+  - TakeDamage
+  - SyncMoveState
+  - OnPhotonSerializeView
   DisableAutoOpenWizard: 1
   ShowSettings: 0
   DevRegionSetOnce: 1
