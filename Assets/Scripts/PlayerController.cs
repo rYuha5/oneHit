@@ -18,6 +18,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     public SPUM_Prefabs spumPrefab;
     public SwordController swordController;
     public GameObject sword;
+    public GameObject shield;
 
     private bool isGrounded = true;
     private bool canJump = true;
@@ -26,6 +27,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     private Vector3 curPos;
     private float curScaleX;
     private bool isMoving = false;
+    private bool isBlocking = false;
     private bool lastSentMoveState = false;
     private float moveSyncCooldown = 0.1f;
     private float moveSyncTimer = 0f;
@@ -57,6 +59,8 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
             hitboxTrigger.ownerPhotonView = pv; // 내 PhotonView 전달
         }
         Debug.Log($"spumPrefab: {spumPrefab != null}");
+        sword.SetActive(true);
+        shield.SetActive(false);
     }
 
     void Update()
@@ -126,10 +130,25 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
                 if (spumPrefab != null)
                     spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
 
-                photonView.RPC("PlayAttack", RpcTarget.Others);
+                pv.RPC("PlayAttack", RpcTarget.Others);
                 swordController?.StartAttack(); // 히트박스 실행
 
                 StartCoroutine(ResetAttackCooldown());
+            }
+
+            if (Input.GetKey(KeyCode.X))
+            {
+                pv.RPC("PlayDefense", RpcTarget.Others);
+                sword.SetActive(false);
+                shield.SetActive(true);
+                rb.velocity = Vector2.zero;
+                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+            }
+            else
+            {
+                pv.RPC("NotPlayDefense", RpcTarget.Others);
+                sword.SetActive(true);
+                shield.SetActive(false);
             }
         }
         else
@@ -193,6 +212,27 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     }
 
     [PunRPC]
+    void PlayDefense()
+    {
+        if (spumPrefab != null)
+        {
+            sword.SetActive(false);
+            shield.SetActive(true);
+            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+        }
+    }
+
+    [PunRPC]
+    void NotPlayDefense()
+    {
+        if (spumPrefab != null)
+        {
+            sword.SetActive(true);
+            shield.SetActive(false);
+        }
+    }
+
+    [PunRPC]
     public void ForceSetPositionRPC(float x, float y)
     {
         Vector3 newPos = new Vector3(x, y, transform.position.z);
@@ -201,7 +241,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         rb.velocity = Vector2.zero;
     }
 
-    [PunRPC]
+    //[PunRPC]
     //public void TakeDamage()
     //{
     //    Debug.Log("피격당함!");

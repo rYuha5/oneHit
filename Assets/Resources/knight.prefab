@@ -2429,8 +2429,8 @@ Transform:
   m_GameObject: {fileID: 5419610741157947498}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalPosition: {x: -0.524, y: -0.196, z: -0}
+  m_LocalScale: {x: 1.7888644, y: 1.7242501, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 5450411564153444990}
@@ -5935,6 +5935,7 @@ MonoBehaviour:
   spumPrefab: {fileID: 495160998520478165}
   swordController: {fileID: 0}
   sword: {fileID: 1610814998686741706}
+  shield: {fileID: 5419610741157947498}
 --- !u!50 &7778222297500599469
 Rigidbody2D:
   serializedVersion: 4
