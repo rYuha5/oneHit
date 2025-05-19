@@ -250,7 +250,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     }
 
     [PunRPC]
-    void DropSwordWithForce(float x, float y, float dummyX, float dummyY)
+    void DropSwordWithForce(float x, float y)
     {
         if (sword != null)
         {
