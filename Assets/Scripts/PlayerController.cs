@@ -11,7 +11,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     private bool canAttack = true;
     public float attackCooldown = 0.5f;
 
-    private PhotonView pv;
+    public PhotonView pv;
     private Rigidbody2D rb;
     private CapsuleCollider2D col2D;
 
@@ -23,7 +23,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
 
     private bool isGrounded = true;
     private bool canJump = true;
-    private bool hasSword = true;
+    public bool hasSword = true;
 
     private Vector3 curPos;
     private float curScaleX;
@@ -127,15 +127,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
                 pv.RPC("JumpRPC", RpcTarget.Others);
             }
 
-            if (Input.GetKeyDown(KeyCode.Z) && canAttack && hasSword)
+            if (Input.GetKeyDown(KeyCode.Z) && canAttack)
             {
                 canAttack = false;
-                if (spumPrefab != null)
-                    spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
-
-                pv.RPC("PlayAttack", RpcTarget.Others);
-                swordController?.StartAttack(); // 히트박스 실행
-
+                spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
+                pv.RPC("PlayAttack", RpcTarget.All);
                 StartCoroutine(ResetAttackCooldown());
             }
 
@@ -145,18 +141,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
             if (holdingX && !isBlocking)
             {
                 isBlocking = true;
-                pv.RPC("PlayDefense", RpcTarget.Others);
-                sword.SetActive(false);
-                shield.SetActive(true);
+                pv.RPC("EnterDefenseMode", RpcTarget.All);
                 rb.velocity = Vector2.zero;
                 spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
             }
             else if (!holdingX && isBlocking)
             {
                 isBlocking = false;
-                pv.RPC("NotPlayDefense", RpcTarget.Others);
-                if(hasSword) sword.SetActive(true);
-                shield.SetActive(false);
+                pv.RPC("ExitDefenseMode", RpcTarget.All);
+            }
+
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                pv.RPC("EnterDefenseMode", RpcTarget.All);
             }
         }
         else
@@ -213,31 +210,23 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     void PlayAttack()
     {
         if (spumPrefab != null)
-        {
             spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
-        }
+
         swordController?.StartAttack();
     }
 
     [PunRPC]
-    void PlayDefense()
+    public void EnterDefenseMode()
     {
-        if (spumPrefab != null)
-        {
-            sword.SetActive(false);
-            shield.SetActive(true);
-            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-        }
+        sword.SetActive(false);
+        shield.SetActive(true);
     }
 
     [PunRPC]
-    void NotPlayDefense()
+    public void ExitDefenseMode()
     {
-        if (spumPrefab != null)
-        {
-            sword.SetActive(true);
-            shield.SetActive(false);
-        }
+        if (hasSword) sword.SetActive(true);
+        shield.SetActive(false);
     }
 
     [PunRPC]
@@ -248,39 +237,44 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         curPos = newPos;
         rb.velocity = Vector2.zero;
     }
-
     [PunRPC]
-    void DropSwordWithForce(float x, float y)
+    public void DropSwordWithForce(float x, float y)
     {
+        if (!pv.IsMine) return;
+
         if (sword != null)
         {
             hasSword = false;
-            sword.SetActive(false); // 원래 칼 숨기기
+            sword.SetActive(false);
         }
 
-        if (fallingSwordPrefab != null)
+        Vector2 force = new Vector2(Random.value < 0.5f ? -1f : 1f, 1f).normalized * 10f;
+        pv.RPC("SpawnSword", RpcTarget.All, x, y, force.x, force.y);
+        pv.RPC("SetHasSword", RpcTarget.AllBuffered, false);
+    }
+
+    [PunRPC]
+    public void SpawnSword(float x, float y, float fx, float fy)
+    {
+        if (!pv.IsMine) return;
+        Vector2 spawnPos = new Vector2(x, y);
+        Vector2 force = new Vector2(fx, fy);
+
+        GameObject droppedSword = PhotonNetwork.Instantiate("fallingweapon", spawnPos, Quaternion.identity);
+        Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();
+        if (rb != null)
         {
-            Vector2 spawnPos = new Vector2(x, y);
-
-            // 기본 위 방향
-            Vector2 force = Vector2.up;
-
-            // 좌우 중 하나를 랜덤으로 추가
-            if (Random.value < 0.5f)
-                force += Vector2.left;
-            else
-                force += Vector2.right;
-
-            force = force.normalized * 5f; // 튕기는 힘 크기 조절
-
-            GameObject droppedSword = Instantiate(fallingSwordPrefab, spawnPos, Quaternion.identity);
-            Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();
-            if (rb != null)
-            {
-                rb.AddForce(force, ForceMode2D.Impulse);
-            }
+            rb.AddForce(force, ForceMode2D.Impulse);
         }
     }
+
+    [PunRPC]
+    public void SetHasSword(bool value)
+    {
+        hasSword = value;
+        sword.SetActive(value);
+    }
+
 
     IEnumerator EnableSwordAfterDelay(float delay)
     {
@@ -303,13 +297,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         {
             stream.SendNext(curPos);
             stream.SendNext(hasSword);
+            stream.SendNext(isBlocking);
             stream.SendNext(transform.localScale.x);
         }
         else
         {
             curPos = (Vector3)stream.ReceiveNext();
             hasSword = (bool)stream.ReceiveNext();
+            isBlocking = (bool)stream.ReceiveNext();
             curScaleX = (float)stream.ReceiveNext();
+
+            sword.SetActive(hasSword && !isBlocking);
+            shield.SetActive(isBlocking);
         }
     }
 }

@@ -13,6 +13,7 @@ public enum PlayerState
     DEBUFF,
     DEATH,
     OTHER,
+    DEFENSE,
 }
 public class SPUM_Prefabs : MonoBehaviour
 {
@@ -34,6 +35,7 @@ public class SPUM_Prefabs : MonoBehaviour
     public List<AnimationClip> DEBUFF_List = new();
     public List<AnimationClip> DEATH_List = new();
     public List<AnimationClip> OTHER_List = new();
+    public List<AnimationClip> DEFENSE_List = new();
     public void OverrideControllerInit()
     {
         Animator animator = _anim;
@@ -77,13 +79,16 @@ public class SPUM_Prefabs : MonoBehaviour
                 case "OTHER":
                     StateAnimationPairs[stateText] = OTHER_List;
                     break;
+                case "DEFENSE":
+                    StateAnimationPairs[stateText] = DEFENSE_List;
+                    break;
             }
         }
     }
     public bool allListsHaveItemsExist(){
         List<List<AnimationClip>> allLists = new List<List<AnimationClip>>()
         {
-            IDLE_List, MOVE_List, ATTACK_List, DAMAGED_List, DEBUFF_List, DEATH_List, OTHER_List
+            IDLE_List, MOVE_List, ATTACK_List, DAMAGED_List, DEBUFF_List, DEATH_List, OTHER_List, DEFENSE_List
         };
 
         return allLists.All(list => list.Count > 0);
@@ -98,6 +103,7 @@ public class SPUM_Prefabs : MonoBehaviour
         DEBUFF_List = new();
         DEATH_List = new();
         OTHER_List = new();
+        DEFENSE_List = new();
         
         var groupedClips = spumPackages
         .SelectMany(package => package.SpumAnimationData)
@@ -147,6 +153,10 @@ public class SPUM_Prefabs : MonoBehaviour
                     //StateAnimationPairs[stateType] = DEATH_List;
                     break;
                 case "OTHER":
+                    OTHER_List.AddRange(orderedClips.Select(clip => LoadAnimationClip(clip.ClipPath)));
+                    //StateAnimationPairs[stateType] = OTHER_List;
+                    break;
+                case "DEFENSE":
                     OTHER_List.AddRange(orderedClips.Select(clip => LoadAnimationClip(clip.ClipPath)));
                     //StateAnimationPairs[stateType] = OTHER_List;
                     break;

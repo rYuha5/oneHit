@@ -1,17 +1,15 @@
 using System.Collections;
 using UnityEngine;
+using Photon.Pun;
 
-public class SwordController : MonoBehaviour
+public class SwordController : MonoBehaviourPunCallbacks
 {
-    public GameObject hitbox;                // 히트박스 오브젝트 (BoxCollider2D, isTrigger)
-    public float attackDuration = 1f;      // 히트박스 유지 시간
-    private bool isAttacking = false;
+    public GameObject hitboxPrefab;
+    public GameObject fallingSwordPrefab;
+    public float attackDuration = 0.3f;
 
-    void Start()
-    {
-        if (hitbox != null)
-            hitbox.SetActive(false);         // 시작 시 비활성화
-    }
+    [HideInInspector] public GameObject hitbox;  // 현재 활성 히트박스
+    private bool isAttacking = false;
 
     public void StartAttack()
     {
@@ -24,13 +22,29 @@ public class SwordController : MonoBehaviour
         isAttacking = true;
 
         if (hitbox != null)
-            hitbox.SetActive(true);
+        {
+            Destroy(hitbox);        // 기존 히트박스 제거
+            yield return null;     // 1 프레임 기다림
+        }
+
+        hitbox = Instantiate(hitboxPrefab, transform);
+        hitbox.transform.localPosition = new Vector3(0.5f, 0f, 0f); // 칼끝 위치로 조정 (필요시 수정)
+
+        var trigger = hitbox.GetComponent<HitboxTrigger>();
+        if (trigger != null)
+        {
+            var pc = GetComponentInParent<PlayerController>();
+            trigger.ownerPhotonView = pc.pv;
+            trigger.ownerPlayerController = pc;
+            trigger.fallingSwordPrefab = fallingSwordPrefab;
+        }
 
         yield return new WaitForSeconds(attackDuration);
 
         if (hitbox != null)
-            hitbox.SetActive(false);
+            Destroy(hitbox);  // 공격 종료 후 히트박스 제거
 
         isAttacking = false;
     }
+
 }

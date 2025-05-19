@@ -1,25 +1,22 @@
 using UnityEngine;
 using Photon.Pun;
 
-public class FallingSword : MonoBehaviour
+public class FallingSword : MonoBehaviourPunCallbacks
 {
-    void OnTriggerEnter2D(Collider2D other)
+    void OnCollisionEnter2D(Collision2D collision)
     {
-        if (!other.CompareTag("Player")) return;
+        if (!collision.collider.CompareTag("Player")) return;
 
-        PlayerController player = other.GetComponent<PlayerController>();
-        if (player == null) return;
+        PlayerController player = collision.collider.GetComponent<PlayerController>();
+        if (player == null || !player.photonView.IsMine) return;
 
-        // 로컬 플레이어만 반응
-        if (!player.photonView.IsMine) return;
+        player.photonView.RPC("SetHasSword", RpcTarget.AllBuffered, true);
+        player.swordController.hitbox = null;
 
-        // 내 칼 다시 보이게
-        if (player.sword != null)
+        // 반드시 오브젝트 owner가 Destroy 해야 함
+        if (photonView.IsMine)
         {
-            player.sword.SetActive(true);
+            PhotonNetwork.Destroy(gameObject);
         }
-
-        // 이 떨어진 칼 오브젝트 삭제
-        Destroy(gameObject);
     }
 }

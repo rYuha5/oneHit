@@ -10,8 +10,10 @@ GameObject:
   m_Component:
   - component: {fileID: 3804345799060807058}
   - component: {fileID: 8669772689438905881}
+  - component: {fileID: -89628239732121134}
   - component: {fileID: -6346980235979726305}
   - component: {fileID: 3253999097021083636}
+  - component: {fileID: -6465807150395558682}
   m_Layer: 0
   m_Name: fallingweapon
   m_TagString: Untagged
@@ -86,6 +88,29 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!114 &-89628239732121134
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6320688966700029606}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa584fbee541324448dd18d8409c7a41, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  ObservedComponentsFoldoutOpen: 1
+  Group: 0
+  prefixField: -1
+  Synchronization: 3
+  OwnershipTransfer: 0
+  observableSearch: 0
+  ObservedComponents:
+  - {fileID: 0}
+  sceneViewId: 0
+  InstantiationId: 0
+  isRuntimeInstantiated: 0
 --- !u!50 &-6346980235979726305
 Rigidbody2D:
   serializedVersion: 4
@@ -142,9 +167,21 @@ CapsuleCollider2D:
   m_CallbackLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_IsTrigger: 1
+  m_IsTrigger: 0
   m_UsedByEffector: 0
   m_UsedByComposite: 0
   m_Offset: {x: 0, y: 0.13368961}
   m_Size: {x: 0.21874997, y: 0.60761935}
   m_Direction: 0
+--- !u!114 &-6465807150395558682
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6320688966700029606}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d9dbc674199f36f448c817a70874c01a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

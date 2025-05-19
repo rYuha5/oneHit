@@ -601,8 +601,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d030491d2b23d1498a92f25aeda3221, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  hitbox: {fileID: 8432913656281726239}
+  hitboxPrefab: {fileID: 0}
+  fallingSwordPrefab: {fileID: 0}
   attackDuration: 0.3
+  hitbox: {fileID: 8432913656281726239}
 --- !u!114 &3492149617460693797
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -743,6 +745,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37ada5a456552c046856b54d94f1c82e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  ownerPhotonView: {fileID: 0}
+  ownerPlayerController: {fileID: 0}
+  fallingSwordPrefab: {fileID: 0}
 --- !u!1 &1071384246221020117
 GameObject:
   m_ObjectHideFlags: 0
@@ -1068,8 +1073,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1d030491d2b23d1498a92f25aeda3221, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  hitbox: {fileID: 1036035483051789701}
+  hitboxPrefab: {fileID: 0}
+  fallingSwordPrefab: {fileID: 0}
   attackDuration: 1
+  hitbox: {fileID: 1036035483051789701}
 --- !u!114 &2023306372921707964
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3039,9 +3046,14 @@ MonoBehaviour:
   moveSpeed: 5
   jumpForce: 10
   fastFallGravityScale: 10
+  attackCooldown: 0.5
   pv: {fileID: 3893467911767513987}
+  spumPrefab: {fileID: 0}
   swordController: {fileID: 5454404955486445865}
   sword: {fileID: 1610814998686741706}
+  shield: {fileID: 0}
+  fallingSwordPrefab: {fileID: 0}
+  hasSword: 1
 --- !u!95 &8846057032927973416
 Animator:
   serializedVersion: 5
@@ -3052,7 +3064,7 @@ Animator:
   m_GameObject: {fileID: 5836857197505123814}
   m_Enabled: 1
   m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: edc3f740a87ca1549ab4125ffdfee580, type: 2}
+  m_Controller: {fileID: 9100000, guid: e9358c226bb09e24da9c5f7064768810, type: 2}
   m_CullingMode: 0
   m_UpdateMode: 0
   m_ApplyRootMotion: 0

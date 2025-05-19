@@ -56,6 +56,12 @@ MonoBehaviour:
   - NotPlayDefense
   - BounceSwordRPC
   - DropSwordWithForce
+  - SetHitboxActive
+  - StartAttackRPC
+  - SetHasSword
+  - SpawnSword
+  - EnterDefenseMode
+  - ExitDefenseMode
   DisableAutoOpenWizard: 1
   ShowSettings: 0
   DevRegionSetOnce: 1
