@@ -3,11 +3,20 @@ using Photon.Pun;
 
 public class HitboxTrigger : MonoBehaviour
 {
-    public PhotonView ownerPhotonView; // 누가 이 히트박스를 만들었는지
+    public PhotonView ownerPhotonView;
 
     void OnTriggerEnter2D(Collider2D other)
     {
-        if (!ownerPhotonView.IsMine) return; // 내가 소유한 칼이 아니면 처리 안 함
+        if (!ownerPhotonView.IsMine) return;
+
+        if (other.CompareTag("Shield"))
+        {
+            Debug.Log("방패에 튕김!");
+
+            // 칼 튕기기 RPC 요청
+            ownerPhotonView.RPC("BounceSwordRPC", RpcTarget.All);
+            return;
+        }
 
         if (other.CompareTag("Player"))
         {

@@ -241,14 +241,38 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         rb.velocity = Vector2.zero;
     }
 
-    //[PunRPC]
-    //public void TakeDamage()
-    //{
-    //    Debug.Log("피격당함!");
-    //    spumPrefab.PlayAnimation(PlayerState.DAMAGED, 0);
+    [PunRPC]
+    void BounceSwordRPC()
+    {
+        if (sword != null)
+        {
+            // 검 위치를 플레이어 기준으로 랜덤하게 이동
+            Vector2 randomOffset = new Vector2(
+                Random.Range(-10f, 10f),
+                Random.Range(5f, 10f)
+            );
+            sword.transform.position = transform.position + (Vector3)randomOffset;
 
-    //    // hp--; if (hp <= 0) Die();
-    //}
+            // 검을 일시적으로 비활성화 후 재활성화 (연출용)
+            sword.SetActive(false);
+            StartCoroutine(EnableSwordAfterDelay(1.0f)); // 1초 후 재등장
+        }
+    }
+
+    IEnumerator EnableSwordAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (sword != null)
+            sword.SetActive(true);
+    }
+
+    [PunRPC]
+    public void TakeDamage()
+    {
+        Debug.Log("피격당함!");
+        spumPrefab.PlayAnimation(PlayerState.DAMAGED, 0);
+        // hp--; if (hp <= 0) Die();
+    }
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
