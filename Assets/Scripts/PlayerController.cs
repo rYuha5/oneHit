@@ -127,7 +127,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
                 pv.RPC("JumpRPC", RpcTarget.Others);
             }
 
-            if (Input.GetKeyDown(KeyCode.Z) && canAttack)
+            if (Input.GetKeyDown(KeyCode.Z) && canAttack && hasSword)
             {
                 canAttack = false;
                 if (spumPrefab != null)
@@ -139,18 +139,23 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
                 StartCoroutine(ResetAttackCooldown());
             }
 
-            if (Input.GetKey(KeyCode.X))
+
+            bool holdingX = Input.GetKey(KeyCode.X);
+
+            if (holdingX && !isBlocking)
             {
+                isBlocking = true;
                 pv.RPC("PlayDefense", RpcTarget.Others);
                 sword.SetActive(false);
                 shield.SetActive(true);
                 rb.velocity = Vector2.zero;
                 spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
             }
-            else
+            else if (!holdingX && isBlocking)
             {
+                isBlocking = false;
                 pv.RPC("NotPlayDefense", RpcTarget.Others);
-                sword.SetActive(true);
+                if(hasSword) sword.SetActive(true);
                 shield.SetActive(false);
             }
         }
@@ -245,12 +250,28 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     }
 
     [PunRPC]
-    void DropSwordWithForce(float x, float y, float dirX, float dirY)
+    void DropSwordWithForce(float x, float y, float dummyX, float dummyY)
     {
+        if (sword != null)
+        {
+            hasSword = false;
+            sword.SetActive(false); // ¿ø·¡ Ä® ¼û±â±â
+        }
+
         if (fallingSwordPrefab != null)
         {
             Vector2 spawnPos = new Vector2(x, y);
-            Vector2 force = new Vector2(dirX, dirY).normalized * 5f;
+
+            // ±âº» À§ ¹æÇâ
+            Vector2 force = Vector2.up;
+
+            // ÁÂ¿ì Áß ÇÏ³ª¸¦ ·£´ýÀ¸·Î Ãß°¡
+            if (Random.value < 0.5f)
+                force += Vector2.left;
+            else
+                force += Vector2.right;
+
+            force = force.normalized * 5f; // Æ¨±â´Â Èû Å©±â Á¶Àý
 
             GameObject droppedSword = Instantiate(fallingSwordPrefab, spawnPos, Quaternion.identity);
             Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();

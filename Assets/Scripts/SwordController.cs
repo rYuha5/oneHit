@@ -33,13 +33,4 @@ public class SwordController : MonoBehaviour
 
         isAttacking = false;
     }
-
-    void OnTriggerEnter2D(Collider2D other)
-    {
-        if (other.CompareTag("Player"))
-        {
-            Debug.Log("Hit player: " + other.name);
-            // 여기서 데미지 또는 피격 처리 로직 호출 가능
-        }
-    }
 }
