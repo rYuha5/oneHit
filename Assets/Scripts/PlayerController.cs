@@ -19,6 +19,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     public SwordController swordController;
     public GameObject sword;
     public GameObject shield;
+    public GameObject fallingSwordPrefab;
 
     private bool isGrounded = true;
     private bool canJump = true;
@@ -41,7 +42,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         defaultGravityScale = rb.gravityScale;
         curScaleX = transform.localScale.x;
         swordController = sword.GetComponent<SwordController>();
-        var hitboxTrigger = sword.GetComponentInChildren<HitboxTrigger>();
+        var hitbox = sword.GetComponentInChildren<HitboxTrigger>();
 
         if (swordController == null)
         {
@@ -54,9 +55,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
             if (!spumPrefab.allListsHaveItemsExist())
                 Debug.LogWarning("애니메이션 리스트에 비어있는 항목 있음!");
         }
-        if (hitboxTrigger != null)
+        if (hitbox != null)
         {
-            hitboxTrigger.ownerPhotonView = pv; // 내 PhotonView 전달
+            hitbox.ownerPhotonView = pv;
+            hitbox.ownerPlayerController = this;
+            hitbox.fallingSwordPrefab = fallingSwordPrefab;
         }
         Debug.Log($"spumPrefab: {spumPrefab != null}");
         sword.SetActive(true);
@@ -242,20 +245,19 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     }
 
     [PunRPC]
-    void BounceSwordRPC()
+    void DropSwordWithForce(float x, float y, float dirX, float dirY)
     {
-        if (sword != null)
+        if (fallingSwordPrefab != null)
         {
-            // 검 위치를 플레이어 기준으로 랜덤하게 이동
-            Vector2 randomOffset = new Vector2(
-                Random.Range(-10f, 10f),
-                Random.Range(5f, 10f)
-            );
-            sword.transform.position = transform.position + (Vector3)randomOffset;
+            Vector2 spawnPos = new Vector2(x, y);
+            Vector2 force = new Vector2(dirX, dirY).normalized * 5f;
 
-            // 검을 일시적으로 비활성화 후 재활성화 (연출용)
-            sword.SetActive(false);
-            StartCoroutine(EnableSwordAfterDelay(1.0f)); // 1초 후 재등장
+            GameObject droppedSword = Instantiate(fallingSwordPrefab, spawnPos, Quaternion.identity);
+            Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();
+            if (rb != null)
+            {
+                rb.AddForce(force, ForceMode2D.Impulse);
+            }
         }
     }
 
