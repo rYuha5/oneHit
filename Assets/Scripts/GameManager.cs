@@ -127,6 +127,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         int winnerId = (loserId == 0) ? 1 : 0;
         scores[winnerId]++;
 
+        UpdateScoreUI();
         FreezeAllPlayers(true);
         DisableAllHitboxes();
 
@@ -231,6 +232,14 @@ public class GameManager : MonoBehaviourPunCallbacks
             if (view != null && view.IsMine)
             {
                 PhotonNetwork.Destroy(weapon);
+            }
+        }
+        foreach (var player in GameObject.FindGameObjectsWithTag("Player"))
+        {
+            PlayerController pc = player.GetComponent<PlayerController>();
+            if (pc != null && !pc.hasSword)
+            {
+                pc.sword.SetActive(true);
             }
         }
     }
