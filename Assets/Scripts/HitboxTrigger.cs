@@ -11,6 +11,15 @@ public class HitboxTrigger : MonoBehaviourPunCallbacks
     {
         if (ownerPhotonView == null || !ownerPhotonView.IsMine) return;
 
+        if (other.CompareTag("Player"))
+        {
+            PhotonView targetPV = other.GetComponent<PhotonView>();
+            if (targetPV != null && !targetPV.IsMine)
+            {
+                targetPV.RPC("TakeDamage", RpcTarget.All);
+            }
+        }
+
         if (other.CompareTag("Shield"))
         {
             Vector2 contactPoint = transform.position;
@@ -25,15 +34,6 @@ public class HitboxTrigger : MonoBehaviourPunCallbacks
 
             ownerPhotonView.RPC("DropSwordWithForce", RpcTarget.All, contactPoint.x, contactPoint.y + 2, force.x, force.y);
             return;
-        }
-
-        if (other.CompareTag("Player"))
-        {
-            PhotonView targetPV = other.GetComponent<PhotonView>();
-            if (targetPV != null && !targetPV.IsMine)
-            {
-                targetPV.RPC("TakeDamage", RpcTarget.All);
-            }
         }
     }
 }

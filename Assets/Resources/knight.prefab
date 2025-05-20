@@ -2921,6 +2921,7 @@ MonoBehaviour:
   observableSearch: 2
   ObservedComponents:
   - {fileID: -7635091090478220652}
+  - {fileID: 0}
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0

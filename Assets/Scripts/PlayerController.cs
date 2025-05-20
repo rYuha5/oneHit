@@ -238,7 +238,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         rb.velocity = Vector2.zero;
     }
     [PunRPC]
-    public void DropSwordWithForce(float x, float y)
+    public void DropSwordWithForce(float x, float y, float fx, float fy)
     {
         if (!pv.IsMine) return;
 
@@ -248,8 +248,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
             sword.SetActive(false);
         }
 
-        Vector2 force = new Vector2(Random.value < 0.5f ? -1f : 1f, 1f).normalized * 10f;
-        pv.RPC("SpawnSword", RpcTarget.All, x, y, force.x, force.y);
+        pv.RPC("SpawnSword", RpcTarget.All, x, y, fx, fy);
         pv.RPC("SetHasSword", RpcTarget.AllBuffered, false);
     }
 
@@ -261,7 +260,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         Vector2 force = new Vector2(fx, fy);
 
         GameObject droppedSword = PhotonNetwork.Instantiate("fallingweapon", spawnPos, Quaternion.identity);
-        Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();
+        Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();  
         if (rb != null)
         {
             rb.AddForce(force, ForceMode2D.Impulse);
@@ -287,8 +286,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     public void TakeDamage()
     {
         Debug.Log("피격당함!");
-        spumPrefab.PlayAnimation(PlayerState.DAMAGED, 0);
-        // hp--; if (hp <= 0) Die();
+        spumPrefab?.PlayAnimation(PlayerState.DEATH, 0);
     }
 
     public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
