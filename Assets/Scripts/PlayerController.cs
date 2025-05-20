@@ -168,7 +168,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
     IEnumerator ResetAttackCooldown()
     {
-        yield return new WaitForSeconds(attackCooldown);
+        yield return new WaitForSeconds(attackCooldown); // fuck that shit
         canAttack = true;
     }
 
