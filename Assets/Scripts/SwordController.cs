@@ -13,6 +13,9 @@ public class SwordController : MonoBehaviourPunCallbacks
 
     public void StartAttack()
     {
+        var pc = GetComponentInParent<PlayerController>();
+        if (pc != null && (pc.isBlocking || !pc.hasSword)) return;
+
         if (!isAttacking)
             StartCoroutine(AttackRoutine());
     }

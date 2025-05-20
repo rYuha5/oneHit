@@ -2351,8 +2351,8 @@ Transform:
   m_GameObject: {fileID: 5419610741157947498}
   serializedVersion: 2
   m_LocalRotation: {x: -2.971128e-11, y: -2.2383334e-10, z: -0.7071068, w: 0.7071068}
-  m_LocalPosition: {x: 0.1660124, y: 0.1839582, z: 0}
-  m_LocalScale: {x: 1.788864, y: 1.7242498, z: 1}
+  m_LocalPosition: {x: 0.1172, y: 0.4039, z: -0.0026}
+  m_LocalScale: {x: 2.2053115, y: 2.3141158, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 9001965689397920139}
@@ -2822,6 +2822,7 @@ GameObject:
   - component: {fileID: 7778222297500599469}
   - component: {fileID: 495160998520478165}
   - component: {fileID: -7635091090478220652}
+  - component: {fileID: 7931461954604611167}
   m_Layer: 0
   m_Name: knight
   m_TagString: Player
@@ -2918,10 +2919,9 @@ MonoBehaviour:
   prefixField: -1
   Synchronization: 3
   OwnershipTransfer: 0
-  observableSearch: 2
+  observableSearch: 0
   ObservedComponents:
-  - {fileID: -7635091090478220652}
-  - {fileID: 0}
+  - {fileID: 7931461954604611167}
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
@@ -6020,13 +6020,31 @@ MonoBehaviour:
   jumpForce: 10
   fastFallGravityScale: 30
   attackCooldown: 0.5
-  pv: {fileID: 0}
+  pv: {fileID: -5216890596959515434}
   spumPrefab: {fileID: 495160998520478165}
   swordController: {fileID: 5532189008074090347}
   sword: {fileID: 1610814998686741706}
   shield: {fileID: 5419610741157947498}
   fallingSwordPrefab: {fileID: 6320688966700029606, guid: 45ef4eae6754cfd44903ad9989a40da1, type: 3}
   hasSword: 1
+  isBlocking: 0
+  isFrozen: 0
+--- !u!114 &7931461954604611167
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5836857197505123814}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e7cb724808c322458aa4d15f5035fa9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_SynchronizeVelocity: 1
+  m_SynchronizeAngularVelocity: 0
+  m_TeleportEnabled: 1
+  m_TeleportIfDistanceGreaterThan: 3
 --- !u!1 &5847659569308201571
 GameObject:
   m_ObjectHideFlags: 0

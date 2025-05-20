@@ -16,7 +16,7 @@ public class HitboxTrigger : MonoBehaviourPunCallbacks
             PhotonView targetPV = other.GetComponent<PhotonView>();
             if (targetPV != null && !targetPV.IsMine)
             {
-                targetPV.RPC("TakeDamage", RpcTarget.All);
+                GameManager.Instance.photonView.RPC("OnPlayerDefeated", RpcTarget.All, targetPV.Owner.ActorNumber - 1);
             }
         }
 

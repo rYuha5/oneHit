@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 using Photon.Pun;
 
-public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
+public class PlayerController : MonoBehaviourPunCallbacks
 {
     public float moveSpeed = 5f;
     public float jumpForce = 10f;
@@ -25,144 +25,121 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     private bool canJump = true;
     public bool hasSword = true;
 
-    private Vector3 curPos;
-    private float curScaleX;
-    private bool isMoving = false;
-    private bool isBlocking = false;
+    public bool isBlocking = false;
     private bool lastSentMoveState = false;
-    private float moveSyncCooldown = 0.1f;
-    private float moveSyncTimer = 0f;
+    public bool isFrozen = false;
 
+    private float curScaleX;
 
     void Start()
     {
         pv = GetComponent<PhotonView>();
         rb = GetComponent<Rigidbody2D>();
         col2D = GetComponent<CapsuleCollider2D>();
+        rb.interpolation = RigidbodyInterpolation2D.Interpolate;
         defaultGravityScale = rb.gravityScale;
         curScaleX = transform.localScale.x;
+
         swordController = sword.GetComponent<SwordController>();
         var hitbox = sword.GetComponentInChildren<HitboxTrigger>();
 
         if (swordController == null)
-        {
-            Debug.LogWarning("swordController 연결 실패! R_Weapon에 SwordController가 붙었는지 확인하세요.");
-        }
+            Debug.LogWarning("swordController 연결 실패");
 
         if (spumPrefab != null)
         {
             spumPrefab.OverrideControllerInit();
             if (!spumPrefab.allListsHaveItemsExist())
-                Debug.LogWarning("애니메이션 리스트에 비어있는 항목 있음!");
+                Debug.LogWarning("애니메이션 리스트 비어 있음");
         }
+
         if (hitbox != null)
         {
             hitbox.ownerPhotonView = pv;
             hitbox.ownerPlayerController = this;
             hitbox.fallingSwordPrefab = fallingSwordPrefab;
         }
-        Debug.Log($"spumPrefab: {spumPrefab != null}");
+
         sword.SetActive(true);
         shield.SetActive(false);
     }
 
     void Update()
     {
-        if (pv.IsMine)
+        if (!pv.IsMine || isFrozen) return;
+
+        float h = Input.GetAxisRaw("Horizontal");
+        bool isNowMoving = h != 0;
+
+        if (isNowMoving != lastSentMoveState)
         {
-            float h = Input.GetAxisRaw("Horizontal");
-            bool isNowMoving = (h != 0);
-
-            moveSyncTimer += Time.deltaTime;
-
-            if (isNowMoving != lastSentMoveState && moveSyncTimer >= moveSyncCooldown)
-            {
-                lastSentMoveState = isNowMoving;
-                moveSyncTimer = 0f;
-
-                pv.RPC("SyncMoveState", RpcTarget.Others, isNowMoving);
-                spumPrefab.PlayAnimation(isNowMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
-            }
-            rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
-            curPos = transform.position;
-
-            isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
-            if (isGrounded && !canJump) canJump = true;
-
-            if (!isGrounded && Mathf.Abs(h) == 0)
-            {
-                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-            }
-
-            if (h > 0)
-            {
-                pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, -1f);
-                spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
-            }
-            else if (h < 0)
-            {
-                pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, 1f);
-                spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
-            }
-
-            if (h == 0 && isGrounded)
-            {
-                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-            }
-
-            if (Input.GetKey(KeyCode.DownArrow) && !isGrounded)
-            {
-                rb.gravityScale = fastFallGravityScale;
-            }
-            else
-            {
-                rb.gravityScale = defaultGravityScale;
-            }
-
-            if (Input.GetKeyDown(KeyCode.UpArrow) && isGrounded && canJump)
-            {
-                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-                canJump = false;
-                Jump();
-                pv.RPC("JumpRPC", RpcTarget.Others);
-            }
-
-            if (Input.GetKeyDown(KeyCode.Z) && canAttack)
-            {
-                canAttack = false;
-                spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
-                pv.RPC("PlayAttack", RpcTarget.All);
-                StartCoroutine(ResetAttackCooldown());
-            }
-
-
-            bool holdingX = Input.GetKey(KeyCode.X);
-
-            if (holdingX && !isBlocking)
-            {
-                isBlocking = true;
-                pv.RPC("EnterDefenseMode", RpcTarget.All);
-                rb.velocity = Vector2.zero;
-                spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-            }
-            else if (!holdingX && isBlocking)
-            {
-                isBlocking = false;
-                pv.RPC("ExitDefenseMode", RpcTarget.All);
-            }
-
-            if (Input.GetKeyDown(KeyCode.R))
-            {
-                pv.RPC("EnterDefenseMode", RpcTarget.All);
-            }
+            lastSentMoveState = isNowMoving;
+            pv.RPC("SyncMoveState", RpcTarget.Others, isNowMoving);
+            spumPrefab.PlayAnimation(isNowMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
         }
-        else
-        {
-            if ((transform.position - curPos).sqrMagnitude >= 100)
-                transform.position = curPos;
-            else
-                transform.position = Vector3.Lerp(transform.position, curPos, Time.deltaTime * 10);
 
+        rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
+
+        isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
+        if (isGrounded && !canJump) canJump = true;
+
+        if (!isGrounded && Mathf.Abs(h) == 0)
+            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+
+        if (h > 0)
+        {
+            pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, -1f);
+            spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
+        }
+        else if (h < 0)
+        {
+            pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, 1f);
+            spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
+        }
+        else if (h == 0 && isGrounded)
+        {
+            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+        }
+
+        rb.gravityScale = (Input.GetKey(KeyCode.DownArrow) && !isGrounded) ? fastFallGravityScale : defaultGravityScale;
+
+        if (Input.GetKeyDown(KeyCode.UpArrow) && isGrounded && canJump)
+        {
+            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+            canJump = false;
+            Jump();
+            pv.RPC("JumpRPC", RpcTarget.Others);
+        }
+
+        if (Input.GetKeyDown(KeyCode.Z) && canAttack && !isBlocking && hasSword)
+        {
+            canAttack = false;
+            spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
+            pv.RPC("PlayAttack", RpcTarget.All);
+            StartCoroutine(ResetAttackCooldown());
+        }
+
+        bool holdingX = Input.GetKey(KeyCode.X);
+        if (holdingX && !isBlocking)
+        {
+            isBlocking = true;
+            pv.RPC("EnterDefenseMode", RpcTarget.All);
+            rb.velocity = Vector2.zero;
+            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+        }
+        else if (!holdingX && isBlocking)
+        {
+            isBlocking = false;
+            pv.RPC("ExitDefenseMode", RpcTarget.All);
+        }
+
+        if (Input.GetKeyDown(KeyCode.R))
+        {
+            pv.RPC("EnterDefenseMode", RpcTarget.All);
+        }
+
+        if (!pv.IsMine)
+        {
             Vector3 scale = transform.localScale;
             scale.x = curScaleX;
             transform.localScale = scale;
@@ -181,6 +158,17 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
     }
 
+    public void ResetForNextRound()
+    {
+        hasSword = true;
+        sword.SetActive(true);
+        shield.SetActive(false);
+        swordController.hitbox = null;
+        isBlocking = false;
+        rb.velocity = Vector2.zero;
+        spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+    }
+
     [PunRPC]
     void FlipScaleRPC(float direction)
     {
@@ -196,7 +184,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     {
         if (!pv.IsMine)
         {
-            spumPrefab.PlayAnimation(isMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
+            spumPrefab?.PlayAnimation(isMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
         }
     }
 
@@ -209,9 +197,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     [PunRPC]
     void PlayAttack()
     {
-        if (spumPrefab != null)
-            spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
-
+        spumPrefab?.PlayAnimation(PlayerState.ATTACK, 0);
         swordController?.StartAttack();
     }
 
@@ -234,46 +220,29 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     {
         Vector3 newPos = new Vector3(x, y, transform.position.z);
         transform.position = newPos;
-        curPos = newPos;
         rb.velocity = Vector2.zero;
     }
+
     [PunRPC]
     public void DropSwordWithForce(float x, float y, float fx, float fy)
     {
         if (!pv.IsMine) return;
 
-        if (sword != null)
-        {
-            hasSword = false;
-            sword.SetActive(false);
-        }
-
-        pv.RPC("SpawnSword", RpcTarget.All, x, y, fx, fy);
-        pv.RPC("SetHasSword", RpcTarget.AllBuffered, false);
-    }
-
-    [PunRPC]
-    public void SpawnSword(float x, float y, float fx, float fy)
-    {
-        if (!pv.IsMine) return;
+        hasSword = false;
+        sword.SetActive(false);
         Vector2 spawnPos = new Vector2(x, y);
-        Vector2 force = new Vector2(fx, fy);
-
         GameObject droppedSword = PhotonNetwork.Instantiate("fallingweapon", spawnPos, Quaternion.identity);
-        Rigidbody2D rb = droppedSword.GetComponent<Rigidbody2D>();  
-        if (rb != null)
-        {
-            rb.AddForce(force, ForceMode2D.Impulse);
-        }
+        droppedSword.GetComponent<Rigidbody2D>()?.AddForce(new Vector2(fx, fy), ForceMode2D.Impulse);
+
+        pv.RPC("SetHasSword", RpcTarget.AllBuffered, false);
     }
 
     [PunRPC]
     public void SetHasSword(bool value)
     {
         hasSword = value;
-        sword.SetActive(value);
+        sword.SetActive(hasSword && !isBlocking);
     }
-
 
     IEnumerator EnableSwordAfterDelay(float delay)
     {
@@ -287,26 +256,5 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     {
         Debug.Log("피격당함!");
         spumPrefab?.PlayAnimation(PlayerState.DEATH, 0);
-    }
-
-    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
-    {
-        if (stream.IsWriting)
-        {
-            stream.SendNext(curPos);
-            stream.SendNext(hasSword);
-            stream.SendNext(isBlocking);
-            stream.SendNext(transform.localScale.x);
-        }
-        else
-        {
-            curPos = (Vector3)stream.ReceiveNext();
-            hasSword = (bool)stream.ReceiveNext();
-            isBlocking = (bool)stream.ReceiveNext();
-            curScaleX = (float)stream.ReceiveNext();
-
-            sword.SetActive(hasSword && !isBlocking);
-            shield.SetActive(isBlocking);
-        }
     }
 }
