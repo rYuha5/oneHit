@@ -6,8 +6,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
 {
     public float moveSpeed = 5f;
     public float jumpForce = 10f;
-    private float defaultGravityScale;
-    public float fastFallGravityScale = 30f;
+    public float fastFallSpeed = 40f;
     private bool canAttack = true;
     public float attackCooldown = 0.5f;
 
@@ -37,7 +36,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
         rb = GetComponent<Rigidbody2D>();
         col2D = GetComponent<CapsuleCollider2D>();
         rb.interpolation = RigidbodyInterpolation2D.Interpolate;
-        defaultGravityScale = rb.gravityScale;
+        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         curScaleX = transform.localScale.x;
 
         swordController = sword.GetComponent<SwordController>();
@@ -64,13 +63,16 @@ public class PlayerController : MonoBehaviourPunCallbacks
         shield.SetActive(false);
     }
 
+
     void Update()
     {
         if (!pv.IsMine || isFrozen) return;
 
+        //좌우 입력
         float h = Input.GetAxisRaw("Horizontal");
         bool isNowMoving = h != 0;
 
+        //애니메이션 상태 전파
         if (isNowMoving != lastSentMoveState)
         {
             lastSentMoveState = isNowMoving;
@@ -78,14 +80,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
             spumPrefab.PlayAnimation(isNowMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
         }
 
-        rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
-
-        isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
-        if (isGrounded && !canJump) canJump = true;
-
-        if (!isGrounded && Mathf.Abs(h) == 0)
-            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-
+        // 회전 (Flip)
         if (h > 0)
         {
             pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, -1f);
@@ -101,8 +96,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
             spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
         }
 
-        rb.gravityScale = (Input.GetKey(KeyCode.DownArrow) && !isGrounded) ? fastFallGravityScale : defaultGravityScale;
-
+        //점프 입력
         if (Input.GetKeyDown(KeyCode.UpArrow) && isGrounded && canJump)
         {
             spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
@@ -111,6 +105,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
             pv.RPC("JumpRPC", RpcTarget.Others);
         }
 
+        //공격 입력
         if (Input.GetKeyDown(KeyCode.Z) && canAttack && !isBlocking && hasSword)
         {
             canAttack = false;
@@ -119,6 +114,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
             StartCoroutine(ResetAttackCooldown());
         }
 
+        // 방어 입력
         bool holdingX = Input.GetKey(KeyCode.X);
         if (holdingX && !isBlocking)
         {
@@ -138,11 +134,35 @@ public class PlayerController : MonoBehaviourPunCallbacks
             pv.RPC("EnterDefenseMode", RpcTarget.All);
         }
 
+        //원격 플레이어일 경우 scale 보정
         if (!pv.IsMine)
         {
             Vector3 scale = transform.localScale;
             scale.x = curScaleX;
             transform.localScale = scale;
+        }
+    }
+
+    void FixedUpdate()
+    {
+        if (!pv.IsMine || isFrozen) return;
+
+        float h = Input.GetAxisRaw("Horizontal");
+
+        // 좌우 이동
+        rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
+
+        // 빠른 낙하 처리
+        if (Input.GetKey(KeyCode.DownArrow) && !isGrounded)
+        {
+            rb.velocity += Vector2.down * fastFallSpeed * Time.fixedDeltaTime;
+        }
+
+        //  땅 착지 판정
+        isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
+        if (isGrounded && !canJump)
+        {
+            canJump = true;
         }
     }
 
