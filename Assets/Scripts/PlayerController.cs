@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using Photon.Pun;
+using TMPro;
 
 public class PlayerController : MonoBehaviourPunCallbacks
 {
@@ -59,10 +60,10 @@ public class PlayerController : MonoBehaviourPunCallbacks
             hitbox.fallingSwordPrefab = fallingSwordPrefab;
         }
 
+        SetNicknameDisplay();
         sword.SetActive(true);
         shield.SetActive(false);
     }
-
 
     void Update()
     {
@@ -172,6 +173,27 @@ public class PlayerController : MonoBehaviourPunCallbacks
         canAttack = true;
     }
 
+    void SetNicknameDisplay()
+    {
+        Transform nameCanvas = transform.Find("NameCanvas");
+        if (nameCanvas == null) return;
+
+        TextMeshProUGUI nameText = nameCanvas.GetComponentInChildren<TextMeshProUGUI>();
+        if (nameText == null) return;
+
+        // 닉네임 표시
+        nameText.text = pv.Owner.NickName;
+
+        // 머티리얼 인스턴스 생성 (중앙 복제)
+        Material clonedMat = new Material(nameText.fontMaterial);
+        nameText.fontMaterial = clonedMat;
+
+        // 윤곽선 색상 설정
+        Color outlineColor = pv.IsMine ? Color.green : Color.red;
+        clonedMat.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.4f); // 두께 유지
+        clonedMat.SetColor(ShaderUtilities.ID_OutlineColor, outlineColor);
+    }
+
     void Jump()
     {
         rb.velocity = new Vector2(rb.velocity.x, 0f);
@@ -197,6 +219,15 @@ public class PlayerController : MonoBehaviourPunCallbacks
         scale.x = direction > 0 ? absX : -absX;
         transform.localScale = scale;
         curScaleX = scale.x;
+
+        //이름 NameCanvas를 항상 정방향으로 고정
+        Transform nameCanvas = transform.Find("NameCanvas");
+        if (nameCanvas != null)
+        {
+            Vector3 nameScale = nameCanvas.localScale;
+            nameScale.x = Mathf.Abs(nameScale.x); // 항상 양수로 고정
+            nameCanvas.localScale = nameScale;
+        }
     }
 
     [PunRPC]
