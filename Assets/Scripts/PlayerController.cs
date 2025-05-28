@@ -29,6 +29,8 @@ public class PlayerController : MonoBehaviourPunCallbacks
     private bool lastSentMoveState = false;
     public bool isFrozen = false;
 
+    public Transform nameCanvasTransform;
+
     private float curScaleX;
 
     void Start()
@@ -69,9 +71,24 @@ public class PlayerController : MonoBehaviourPunCallbacks
     {
         if (!pv.IsMine || isFrozen) return;
 
-        //좌우 입력
+        // 좌우 이동
         float h = Input.GetAxisRaw("Horizontal");
         bool isNowMoving = h != 0;
+        rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
+
+        // 빠른 낙하 처리
+        if (Input.GetKey(KeyCode.DownArrow) && !isGrounded)
+        {
+            rb.velocity += Vector2.down * fastFallSpeed * Time.fixedDeltaTime;
+        }
+
+        //  땅 착지 판정
+        isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
+        if (isGrounded && !canJump)
+        {
+            canJump = true;
+        }
+
 
         //애니메이션 상태 전파
         if (isNowMoving != lastSentMoveState)
@@ -144,28 +161,18 @@ public class PlayerController : MonoBehaviourPunCallbacks
         }
     }
 
-    void FixedUpdate()
+    void LateUpdate()
     {
-        if (!pv.IsMine || isFrozen) return;
-
-        float h = Input.GetAxisRaw("Horizontal");
-
-        // 좌우 이동
-        rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
-
-        // 빠른 낙하 처리
-        if (Input.GetKey(KeyCode.DownArrow) && !isGrounded)
+        if (nameCanvasTransform != null)
         {
-            rb.velocity += Vector2.down * fastFallSpeed * Time.fixedDeltaTime;
-        }
+            // 캐릭터 머리 위 위치로 이동
+            nameCanvasTransform.position = transform.position + new Vector3(0f, 1.5f, 0f);
 
-        //  땅 착지 판정
-        isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
-        if (isGrounded && !canJump)
-        {
-            canJump = true;
+            // 항상 카메라를 바라보게
+            nameCanvasTransform.forward = Camera.main.transform.forward;
         }
     }
+
 
     IEnumerator ResetAttackCooldown()
     {
@@ -196,7 +203,7 @@ public class PlayerController : MonoBehaviourPunCallbacks
 
     void Jump()
     {
-        rb.velocity = new Vector2(rb.velocity.x, 0f);
+        rb.velocity = Vector2.zero;
         rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
     }
 
@@ -219,15 +226,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
         scale.x = direction > 0 ? absX : -absX;
         transform.localScale = scale;
         curScaleX = scale.x;
-
-        //이름 NameCanvas를 항상 정방향으로 고정
-        Transform nameCanvas = transform.Find("NameCanvas");
-        if (nameCanvas != null)
-        {
-            Vector3 nameScale = nameCanvas.localScale;
-            nameScale.x = Mathf.Abs(nameScale.x); // 항상 양수로 고정
-            nameCanvas.localScale = nameScale;
-        }
     }
 
     [PunRPC]
