@@ -16,7 +16,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     public float attackCooldown = 0.5f;
 
     public PhotonView pv;
-    private Rigidbody2D rb;
+    public Rigidbody2D rb;
     private CapsuleCollider2D col2D;
 
     public SPUM_Prefabs spumPrefab;
@@ -208,28 +208,30 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         rb.velocity = Vector2.zero;
         rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
     }
-
     public void ResetForNextRound()
     {
+        // 1. 상태 초기화
         hasSword = true;
+        canAttack = true;
+        isBlocking = false;
+        currentState = null;
+        rb.velocity = Vector2.zero;
 
-        // 강제 삭제: 이전 라운드에서 떨어뜨린 칼 상태 제거
+        // 2. 버퍼된 RPC 제거
         PhotonNetwork.RemoveRPCs(pv);
-
-        // 동기화된 상태로 다시 설정
+        // 3. 상태 복구 동기화
         pv.RPC("SetHasSword", RpcTarget.AllBuffered, true);
 
-        // 상태 재정의
-        if (sword != null) sword.SetActive(true);
+        // 4. 시각적, 물리적 상태 복원
+        if (sword != null)
+        {
+            sword.SetActive(true);
+            swordController = sword.GetComponent<SwordController>();
+        }
+
         if (shield != null) shield.SetActive(false);
 
-        if (swordController != null)
-            swordController.hitbox = null;
-
-        isBlocking = false;
-        rb.velocity = Vector2.zero;
-        currentState = null;
-        canAttack = true;
+        // 5. 애니메이션 초기화
         SyncAnimationState(PlayerState.IDLE);
     }
 
@@ -302,7 +304,7 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         Vector2 spawnPos = new Vector2(x, y);
         GameObject droppedSword = PhotonNetwork.Instantiate("fallingweapon", spawnPos, Quaternion.identity);
         droppedSword.GetComponent<Rigidbody2D>()?.AddForce(new Vector2(fx, fy), ForceMode2D.Impulse);
-        pv.RPC("SetHasSword", RpcTarget.AllBuffered, false);
+        pv.RPC("SetHasSword", RpcTarget.All, false);
     }
 
     [PunRPC]
@@ -311,8 +313,11 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
         hasSword = value;
         if (sword != null)
             sword.SetActive(hasSword && !isBlocking);
+
         if (hasSword && swordController != null)
-            swordController.hitbox = null;
+        {
+            swordController.hitbox = sword.GetComponentInChildren<HitboxTrigger>();
+        }
     }
 
     [PunRPC]

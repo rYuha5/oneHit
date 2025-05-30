@@ -8,7 +8,7 @@ public class SwordController : MonoBehaviourPunCallbacks
     public GameObject fallingSwordPrefab;
     public float attackDuration = 0.3f;
 
-    [HideInInspector] public GameObject hitbox;  // 현재 활성 히트박스
+    public HitboxTrigger hitbox;  // 현재 활성 히트박스
     private bool isAttacking = false;
 
     public void StartAttack()
@@ -26,28 +26,31 @@ public class SwordController : MonoBehaviourPunCallbacks
 
         if (hitbox != null)
         {
-            Destroy(hitbox);        // 기존 히트박스 제거
-            yield return null;     // 1 프레임 기다림
+            Destroy(hitbox.gameObject);  // 기존 히트박스 제거
+            hitbox = null;
+            yield return null;
         }
 
-        hitbox = Instantiate(hitboxPrefab, transform);
-        hitbox.transform.localPosition = new Vector3(0.5f, 0f, 0f); // 칼끝 위치로 조정 (필요시 수정)
+        GameObject hitboxObj = Instantiate(hitboxPrefab, transform);
+        hitboxObj.transform.localPosition = new Vector3(0.5f, 0f, 0f); // 칼끝 위치로 조정
 
-        var trigger = hitbox.GetComponent<HitboxTrigger>();
-        if (trigger != null)
+        hitbox = hitboxObj.GetComponent<HitboxTrigger>();
+        if (hitbox != null)
         {
             var pc = GetComponentInParent<PlayerController>();
-            trigger.ownerPhotonView = pc.pv;
-            trigger.ownerPlayerController = pc;
-            trigger.fallingSwordPrefab = fallingSwordPrefab;
+            hitbox.ownerPhotonView = pc.pv;
+            hitbox.ownerPlayerController = pc;
+            hitbox.fallingSwordPrefab = fallingSwordPrefab;
         }
 
         yield return new WaitForSeconds(attackDuration);
 
         if (hitbox != null)
-            Destroy(hitbox);  // 공격 종료 후 히트박스 제거
+        {
+            Destroy(hitbox.gameObject);  // 공격 종료 후 히트박스 제거
+            hitbox = null;
+        }
 
         isAttacking = false;
     }
-
 }
