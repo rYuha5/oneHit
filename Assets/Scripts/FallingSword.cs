@@ -7,16 +7,17 @@ public class FallingSword : MonoBehaviourPunCallbacks
     {
         if (!collision.collider.CompareTag("Player")) return;
 
-        PlayerController player = collision.collider.GetComponent<PlayerController>();
-        if (player == null || !player.photonView.IsMine) return;
+        var player = collision.collider.GetComponent<PlayerController>();
+        if (player == null) return;
 
-        player.photonView.RPC("SetHasSword", RpcTarget.AllBuffered, true);
-        player.swordController.hitbox = null;
-
-        // 반드시 오브젝트 owner가 Destroy 해야 함
-        if (photonView.IsMine)
+        // 강제 회수 조건 완화
+        if (player.photonView.IsMine && player.hasSword == false)
         {
-            PhotonNetwork.Destroy(gameObject);
+            player.photonView.RPC("SetHasSword", RpcTarget.AllBuffered, true);
+            player.swordController.hitbox = null;
+
+            if (photonView.IsMine)
+                PhotonNetwork.Destroy(gameObject);
         }
     }
 }

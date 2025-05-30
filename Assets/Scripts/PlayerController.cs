@@ -3,7 +3,6 @@ using UnityEngine;
 using Photon.Pun;
 using TMPro;
 
-
 public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
 {
     private Vector3 networkPosition;
@@ -32,17 +31,18 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
 
     public bool isBlocking = false;
     private bool lastSentMoveState = false;
+    private bool lastSentBlockingState = false;
     public bool isFrozen = false;
 
-
     private float curScaleX;
+    private PlayerState? currentState = null;
 
     void Start()
     {
         pv = GetComponent<PhotonView>();
         rb = GetComponent<Rigidbody2D>();
         col2D = GetComponent<CapsuleCollider2D>();
-        rb.interpolation = RigidbodyInterpolation2D.Interpolate;
+        rb.interpolation = RigidbodyInterpolation2D.None;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         curScaleX = transform.localScale.x;
 
@@ -68,101 +68,100 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
 
         sword.SetActive(true);
         shield.SetActive(false);
+
+        if (isFrozen)
+        {
+            rb.isKinematic = true;
+            rb.velocity = Vector2.zero;
+        }
     }
 
     void Update()
     {
         if (!pv.IsMine || isFrozen) return;
 
-        // 좌우 이동
+        bool holdingX = Input.GetKey(KeyCode.X);
+
         float h = Input.GetAxisRaw("Horizontal");
         bool isNowMoving = h != 0;
+
+        if (isBlocking)
+        {
+            if (!holdingX)
+            {
+                isBlocking = false;
+                pv.RPC("ExitDefenseMode", RpcTarget.All);
+            }
+            SyncAnimationState(PlayerState.DEFENSE);
+            return;
+        }
+        else
+        {
+            if (holdingX && isGrounded)
+            {
+                SyncAnimationState(PlayerState.IDLE);
+                isBlocking = true;
+                pv.RPC("EnterDefenseMode", RpcTarget.All);
+                rb.velocity = Vector2.zero;
+                return;
+            }
+        }
+
         rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
 
-        // 빠른 낙하 처리
         if (Input.GetKey(KeyCode.DownArrow) && !isGrounded)
-        {
             rb.velocity += Vector2.down * fastFallSpeed * Time.fixedDeltaTime;
-        }
 
-        //  땅 착지 판정
         isGrounded = Physics2D.OverlapCircle((Vector2)transform.position + new Vector2(0, -0.5f), 0.07f, 1 << LayerMask.NameToLayer("Ground"));
-        if (isGrounded && !canJump)
-        {
-            canJump = true;
-        }
+        if (isGrounded && !canJump) canJump = true;
 
-
-        //애니메이션 상태 전파
-        if (isNowMoving != lastSentMoveState)
+        if (isNowMoving != lastSentMoveState || isBlocking != lastSentBlockingState)
         {
             lastSentMoveState = isNowMoving;
-            pv.RPC("SyncMoveState", RpcTarget.Others, isNowMoving);
-            spumPrefab.PlayAnimation(isNowMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
+            lastSentBlockingState = isBlocking;
+            pv.RPC("SyncMoveState", RpcTarget.Others, isNowMoving, isBlocking);
         }
 
-        // 회전 (Flip)
         if (h > 0)
-        {
             pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, -1f);
-            spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
-        }
         else if (h < 0)
-        {
             pv.RPC("FlipScaleRPC", RpcTarget.AllBuffered, 1f);
-            spumPrefab?.PlayAnimation(PlayerState.MOVE, 0);
-        }
-        else if (h == 0 && isGrounded)
-        {
-            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-        }
 
-        //점프 입력
+        if (isNowMoving)
+            SyncAnimationState(PlayerState.MOVE);
+        else
+            SyncAnimationState(PlayerState.IDLE);
+
         if (Input.GetKeyDown(KeyCode.UpArrow) && isGrounded && canJump)
         {
-            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
             canJump = false;
             Jump();
             pv.RPC("JumpRPC", RpcTarget.Others);
         }
 
-        //공격 입력
-        if (Input.GetKeyDown(KeyCode.Z) && canAttack && !isBlocking && hasSword)
+        if (Input.GetKeyDown(KeyCode.Z) && canAttack && hasSword)
         {
             canAttack = false;
-            spumPrefab.PlayAnimation(PlayerState.ATTACK, 0);
+            SyncAnimationState(PlayerState.ATTACK);
             pv.RPC("PlayAttack", RpcTarget.All);
             StartCoroutine(ResetAttackCooldown());
         }
 
-        // 방어 입력
-        bool holdingX = Input.GetKey(KeyCode.X);
-        if (holdingX && !isBlocking)
-        {
-            isBlocking = true;
-            pv.RPC("EnterDefenseMode", RpcTarget.All);
-            rb.velocity = Vector2.zero;
-            spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
-        }
-        else if (!holdingX && isBlocking)
-        {
-            isBlocking = false;
-            pv.RPC("ExitDefenseMode", RpcTarget.All);
-        }
-
         if (Input.GetKeyDown(KeyCode.R))
-        {
             pv.RPC("EnterDefenseMode", RpcTarget.All);
-        }
+    }
 
-        //원격 플레이어일 경우 scale 보정
+    void FixedUpdate()
+    {
         if (!pv.IsMine)
         {
             float lag = Time.time - lastSyncTime;
-            Vector3 predictedPos = new Vector3(networkPosition.x + networkVelocity.x * lag, networkPosition.y + networkVelocity.y * lag, transform.position.z); // z는 고정);
-            transform.position = Vector3.Lerp(transform.position, predictedPos, Time.deltaTime * 10f);
+            Vector3 predictedPos = new Vector3(
+                networkPosition.x + networkVelocity.x * lag,
+                networkPosition.y + networkVelocity.y * lag,
+                transform.position.z);
+            transform.position = Vector3.Lerp(transform.position, predictedPos, Time.fixedDeltaTime * 10f);
 
-            // scale 보정 유지
             Vector3 scale = transform.localScale;
             scale.x = curScaleX;
             transform.localScale = scale;
@@ -173,26 +172,36 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     {
         if (stream.IsWriting)
         {
-            // 내 플레이어 → 위치와 속도 전송
             stream.SendNext(transform.position);
             stream.SendNext(rb.velocity);
         }
         else
         {
-            // 상대방 위치/속도 수신 → 예측용 데이터 저장
             networkPosition = (Vector3)stream.ReceiveNext();
             networkVelocity = (Vector3)stream.ReceiveNext();
             lastSyncTime = Time.time;
         }
     }
 
+    void SyncAnimationState(PlayerState state)
+    {
+        if (currentState == state) return;
+        spumPrefab?.PlayAnimation(state, 0);
+        currentState = state;
+
+        if (pv.IsMine)
+        {
+            bool isMove = state == PlayerState.MOVE;
+            bool isDefense = state == PlayerState.DEFENSE;
+            pv.RPC("SyncMoveState", RpcTarget.Others, isMove, isDefense);
+        }
+    }
 
     IEnumerator ResetAttackCooldown()
     {
-        yield return new WaitForSeconds(attackCooldown);//joggatne server
+        yield return new WaitForSeconds(attackCooldown);
         canAttack = true;
     }
-
 
     void Jump()
     {
@@ -203,12 +212,25 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     public void ResetForNextRound()
     {
         hasSword = true;
-        sword.SetActive(true);
-        shield.SetActive(false);
-        swordController.hitbox = null;
+
+        // 강제 삭제: 이전 라운드에서 떨어뜨린 칼 상태 제거
+        PhotonNetwork.RemoveRPCs(pv);
+
+        // 동기화된 상태로 다시 설정
+        pv.RPC("SetHasSword", RpcTarget.AllBuffered, true);
+
+        // 상태 재정의
+        if (sword != null) sword.SetActive(true);
+        if (shield != null) shield.SetActive(false);
+
+        if (swordController != null)
+            swordController.hitbox = null;
+
         isBlocking = false;
         rb.velocity = Vector2.zero;
-        spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
+        currentState = null;
+        canAttack = true;
+        SyncAnimationState(PlayerState.IDLE);
     }
 
     [PunRPC]
@@ -222,24 +244,25 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     }
 
     [PunRPC]
-    void SyncMoveState(bool isMoving)
+    void SyncMoveState(bool isMoving, bool isBlockingRemote)
     {
         if (!pv.IsMine)
         {
-            spumPrefab?.PlayAnimation(isMoving ? PlayerState.MOVE : PlayerState.IDLE, 0);
+            if (isBlockingRemote)
+                SyncAnimationState(PlayerState.DEFENSE);
+            else if (isMoving)
+                SyncAnimationState(PlayerState.MOVE);
+            else
+                SyncAnimationState(PlayerState.IDLE);
         }
     }
 
-    [PunRPC]
-    void JumpRPC()
-    {
-        if (!pv.IsMine) Jump();
-    }
+    [PunRPC] void JumpRPC() { if (!pv.IsMine) Jump(); }
 
     [PunRPC]
     void PlayAttack()
     {
-        spumPrefab?.PlayAnimation(PlayerState.ATTACK, 0);
+        SyncAnimationState(PlayerState.ATTACK);
         swordController?.StartAttack();
     }
 
@@ -253,38 +276,32 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     [PunRPC]
     public void ExitDefenseMode()
     {
-        if (hasSword) sword.SetActive(true);
         shield.SetActive(false);
+        if (hasSword && sword != null) sword.SetActive(true);
     }
 
     [PunRPC]
     public void ForceSetPositionRPC(float x, float y)
     {
         Vector3 newPos = new Vector3(x, y, transform.position.z);
-        transform.position = newPos;
-
         if (rb != null)
         {
+            rb.isKinematic = true;
             rb.velocity = Vector2.zero;
+            rb.position = newPos;
         }
-        else
-        {
-            Debug.LogWarning("Rigidbody2D가 초기화되지 않았습니다.");
-        }
+        transform.position = newPos;
     }
-
 
     [PunRPC]
     public void DropSwordWithForce(float x, float y, float fx, float fy)
     {
         if (!pv.IsMine) return;
-
         hasSword = false;
         sword.SetActive(false);
         Vector2 spawnPos = new Vector2(x, y);
         GameObject droppedSword = PhotonNetwork.Instantiate("fallingweapon", spawnPos, Quaternion.identity);
         droppedSword.GetComponent<Rigidbody2D>()?.AddForce(new Vector2(fx, fy), ForceMode2D.Impulse);
-
         pv.RPC("SetHasSword", RpcTarget.AllBuffered, false);
     }
 
@@ -292,20 +309,15 @@ public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
     public void SetHasSword(bool value)
     {
         hasSword = value;
-        sword.SetActive(hasSword && !isBlocking);
-    }
-
-    IEnumerator EnableSwordAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
         if (sword != null)
-            sword.SetActive(true);
+            sword.SetActive(hasSword && !isBlocking);
+        if (hasSword && swordController != null)
+            swordController.hitbox = null;
     }
 
     [PunRPC]
     public void TakeDamage()
     {
-        Debug.Log("피격당함!");
-        spumPrefab?.PlayAnimation(PlayerState.DEATH, 0);
+        SyncAnimationState(PlayerState.DEATH);
     }
 }

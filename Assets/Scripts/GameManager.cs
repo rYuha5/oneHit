@@ -84,10 +84,10 @@ public class GameManager : MonoBehaviourPunCallbacks
     [PunRPC]
     void StartCountdownRPC(double startTime)
     {
-        StartCoroutine(CountdownRoutine(startTime));
+        StartCoroutine(CountdownRouine(startTime));
     }
 
-    IEnumerator CountdownRoutine(double startTime)
+    IEnumerator CountdownRouine(double startTime)
     {
         Rigidbody2D rb = localPlayer.GetComponent<Rigidbody2D>();
         PlayerController controller = localPlayer.GetComponent<PlayerController>();
@@ -113,8 +113,8 @@ public class GameManager : MonoBehaviourPunCallbacks
         countdownText.gameObject.SetActive(false);
 
         rb.isKinematic = false;
-        controller.enabled = true;
         controller.isFrozen = false;
+        controller.enabled = true;
 
         isFirstRound = false;
     }
@@ -219,6 +219,14 @@ public class GameManager : MonoBehaviourPunCallbacks
             {
                 int index = view.Owner.ActorNumber - 1;
                 Vector3 spawnPos = spawnPoints[Mathf.Clamp(index, 0, spawnPoints.Length - 1)].position;
+
+                Rigidbody2D rb = p.GetComponent<Rigidbody2D>();
+                if (rb != null)
+                {
+                    rb.velocity = Vector2.zero;
+                    rb.isKinematic = true; // 중력 및 낙하 정지
+                }
+
                 view.RPC("ForceSetPositionRPC", RpcTarget.All, spawnPos.x, spawnPos.y);
             }
         }
