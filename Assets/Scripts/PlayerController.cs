@@ -3,8 +3,13 @@ using UnityEngine;
 using Photon.Pun;
 using TMPro;
 
-public class PlayerController : MonoBehaviourPunCallbacks
+
+public class PlayerController : MonoBehaviourPunCallbacks, IPunObservable
 {
+    private Vector3 networkPosition;
+    private Vector3 networkVelocity;
+    private float lastSyncTime;
+
     public float moveSpeed = 5f;
     public float jumpForce = 10f;
     public float fastFallSpeed = 40f;
@@ -29,7 +34,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
     private bool lastSentMoveState = false;
     public bool isFrozen = false;
 
-    public Transform nameCanvasTransform;
 
     private float curScaleX;
 
@@ -62,7 +66,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
             hitbox.fallingSwordPrefab = fallingSwordPrefab;
         }
 
-        SetNicknameDisplay();
         sword.SetActive(true);
         shield.SetActive(false);
     }
@@ -155,21 +158,31 @@ public class PlayerController : MonoBehaviourPunCallbacks
         //원격 플레이어일 경우 scale 보정
         if (!pv.IsMine)
         {
+            float lag = Time.time - lastSyncTime;
+            Vector3 predictedPos = new Vector3(networkPosition.x + networkVelocity.x * lag, networkPosition.y + networkVelocity.y * lag, transform.position.z); // z는 고정);
+            transform.position = Vector3.Lerp(transform.position, predictedPos, Time.deltaTime * 10f);
+
+            // scale 보정 유지
             Vector3 scale = transform.localScale;
             scale.x = curScaleX;
             transform.localScale = scale;
         }
     }
 
-    void LateUpdate()
+    public void OnPhotonSerializeView(PhotonStream stream, PhotonMessageInfo info)
     {
-        if (nameCanvasTransform != null)
+        if (stream.IsWriting)
         {
-            // 캐릭터 머리 위 위치로 이동
-            nameCanvasTransform.position = transform.position + new Vector3(0f, 1.5f, 0f);
-
-            // 항상 카메라를 바라보게
-            nameCanvasTransform.forward = Camera.main.transform.forward;
+            // 내 플레이어 → 위치와 속도 전송
+            stream.SendNext(transform.position);
+            stream.SendNext(rb.velocity);
+        }
+        else
+        {
+            // 상대방 위치/속도 수신 → 예측용 데이터 저장
+            networkPosition = (Vector3)stream.ReceiveNext();
+            networkVelocity = (Vector3)stream.ReceiveNext();
+            lastSyncTime = Time.time;
         }
     }
 
@@ -180,26 +193,6 @@ public class PlayerController : MonoBehaviourPunCallbacks
         canAttack = true;
     }
 
-    void SetNicknameDisplay()
-    {
-        Transform nameCanvas = transform.Find("NameCanvas");
-        if (nameCanvas == null) return;
-
-        TextMeshProUGUI nameText = nameCanvas.GetComponentInChildren<TextMeshProUGUI>();
-        if (nameText == null) return;
-
-        // 닉네임 표시
-        nameText.text = pv.Owner.NickName;
-
-        // 머티리얼 인스턴스 생성 (중앙 복제)
-        Material clonedMat = new Material(nameText.fontMaterial);
-        nameText.fontMaterial = clonedMat;
-
-        // 윤곽선 색상 설정
-        Color outlineColor = pv.IsMine ? Color.green : Color.red;
-        clonedMat.SetFloat(ShaderUtilities.ID_OutlineWidth, 0.4f); // 두께 유지
-        clonedMat.SetColor(ShaderUtilities.ID_OutlineColor, outlineColor);
-    }
 
     void Jump()
     {
@@ -269,8 +262,17 @@ public class PlayerController : MonoBehaviourPunCallbacks
     {
         Vector3 newPos = new Vector3(x, y, transform.position.z);
         transform.position = newPos;
-        rb.velocity = Vector2.zero;
+
+        if (rb != null)
+        {
+            rb.velocity = Vector2.zero;
+        }
+        else
+        {
+            Debug.LogWarning("Rigidbody2D가 초기화되지 않았습니다.");
+        }
     }
+
 
     [PunRPC]
     public void DropSwordWithForce(float x, float y, float fx, float fy)

@@ -2822,7 +2822,6 @@ GameObject:
   - component: {fileID: 7778222297500599469}
   - component: {fileID: 495160998520478165}
   - component: {fileID: -7635091090478220652}
-  - component: {fileID: 7931461954604611167}
   m_Layer: 0
   m_Name: knight
   m_TagString: Player
@@ -2917,11 +2916,11 @@ MonoBehaviour:
   ObservedComponentsFoldoutOpen: 1
   Group: 0
   prefixField: -1
-  Synchronization: 3
+  Synchronization: 1
   OwnershipTransfer: 0
   observableSearch: 0
   ObservedComponents:
-  - {fileID: 7931461954604611167}
+  - {fileID: -7635091090478220652}
   sceneViewId: 0
   InstantiationId: 0
   isRuntimeInstantiated: 0
@@ -6029,22 +6028,6 @@ MonoBehaviour:
   hasSword: 1
   isBlocking: 0
   isFrozen: 0
---- !u!114 &7931461954604611167
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5836857197505123814}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0e7cb724808c322458aa4d15f5035fa9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  m_SynchronizeVelocity: 1
-  m_SynchronizeAngularVelocity: 0
-  m_TeleportEnabled: 1
-  m_TeleportIfDistanceGreaterThan: 3
 --- !u!1 &5847659569308201571
 GameObject:
   m_ObjectHideFlags: 0
