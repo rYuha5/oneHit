@@ -1,4 +1,3 @@
-// 통합 수정된 GameManager.cs
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
@@ -14,8 +13,12 @@ public class GameManager : MonoBehaviourPunCallbacks
     public Text scoreTextP2;
     public Text resultText;
     public Text countdownText;
+    public Text exitCountdownText;
 
-    public GameObject playerPrefab;
+    public GameObject AfterMatchPanel;
+    public Button replayButton;
+    public Button exitButton;
+
     private GameObject localPlayer;
     private PhotonView pv;
 
@@ -24,12 +27,9 @@ public class GameManager : MonoBehaviourPunCallbacks
     private bool isFirstRound = true;
     private bool matchOver = false;
 
-    public GameObject AfterMatchPanel;
-    public Button replayButton;
-    public Button exitButton;
-
     private bool replayConfirmed = false;
     private double replayRequestTime = 0;
+    private bool localReplayRequested = false;
 
     void Awake()
     {
@@ -40,6 +40,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     void Start()
     {
         resultText.text = "";
+        exitCountdownText.text = "";
 
         if (PhotonNetwork.IsConnected)
             SpawnImmediately();
@@ -56,9 +57,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     void SpawnImmediately()
     {
-        Player[] sortedPlayers = PhotonNetwork.PlayerList;
-        int index = System.Array.IndexOf(sortedPlayers, PhotonNetwork.LocalPlayer);
-        Vector3 spawnPos = spawnPoints[Mathf.Clamp(index, 0, spawnPoints.Length - 1)].position;
+        Vector3 spawnPos = GetSpawnPosition(PhotonNetwork.LocalPlayer);
         localPlayer = PhotonNetwork.Instantiate("knight", spawnPos, Quaternion.identity);
     }
 
@@ -85,6 +84,13 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
     }
 
+    Vector3 GetSpawnPosition(Player player)
+    {
+        Player[] sorted = PhotonNetwork.PlayerList;
+        int index = System.Array.IndexOf(sorted, player);
+        return spawnPoints[Mathf.Clamp(index, 0, spawnPoints.Length - 1)].position;
+    }
+
     [PunRPC]
     void StartCountdownRPC(double startTime)
     {
@@ -98,6 +104,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         rb.velocity = Vector2.zero;
         rb.isKinematic = true;
+        rb.gravityScale = 0;
         controller.isFrozen = true;
         controller.enabled = false;
 
@@ -117,6 +124,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         countdownText.gameObject.SetActive(false);
 
         rb.isKinematic = false;
+        rb.gravityScale = 1;
         controller.isFrozen = false;
         controller.enabled = true;
         isFirstRound = false;
@@ -152,9 +160,7 @@ public class GameManager : MonoBehaviourPunCallbacks
         yield return new WaitForSeconds(2f);
 
         foreach (var player in FindObjectsOfType<PlayerController>())
-        {
             player.ResetForNextRound();
-        }
 
         DestroyAllDroppedWeapons();
         MoveAllPlayersToSpawn();
@@ -173,8 +179,8 @@ public class GameManager : MonoBehaviourPunCallbacks
         scoreTextP2.text = $"P2: {scores[1]}";
     }
 
-    [PunRPC] void ShowRoundResult(string msg) { resultText.text = msg; }
-    [PunRPC] void ClearResultText() { resultText.text = ""; }
+    [PunRPC] void ShowRoundResult(string msg) => resultText.text = msg;
+    [PunRPC] void ClearResultText() => resultText.text = "";
 
     void FreezeAllPlayers(bool freeze)
     {
@@ -182,15 +188,19 @@ public class GameManager : MonoBehaviourPunCallbacks
         {
             var controller = p.GetComponent<PlayerController>();
             var rb = p.GetComponent<Rigidbody2D>();
-
             controller.isFrozen = freeze;
             if (freeze)
             {
                 rb.velocity = Vector2.zero;
                 rb.isKinematic = true;
+                rb.gravityScale = 0;
                 controller.spumPrefab?.PlayAnimation(PlayerState.IDLE, 0);
             }
-            else rb.isKinematic = false;
+            else
+            {
+                rb.isKinematic = false;
+                rb.gravityScale = 1;
+            }
         }
     }
 
@@ -213,17 +223,11 @@ public class GameManager : MonoBehaviourPunCallbacks
             PhotonView view = p.GetComponent<PhotonView>();
             if (view != null)
             {
-                Player[] sortedPlayers = PhotonNetwork.PlayerList;
-                int index = System.Array.IndexOf(sortedPlayers, view.Owner);
-                Vector3 spawnPos = spawnPoints[Mathf.Clamp(index, 0, spawnPoints.Length - 1)].position;
-
-                Rigidbody2D rb = p.GetComponent<Rigidbody2D>();
-                if (rb != null)
-                {
-                    rb.velocity = Vector2.zero;
-                    rb.isKinematic = true;
-                }
-
+                Vector3 spawnPos = GetSpawnPosition(view.Owner);
+                var rb = p.GetComponent<Rigidbody2D>();
+                rb.velocity = Vector2.zero;
+                rb.isKinematic = true;
+                rb.gravityScale = 0;
                 view.RPC("ForceSetPositionRPC", RpcTarget.All, spawnPos.x, spawnPos.y);
             }
         }
@@ -233,11 +237,9 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         foreach (var weapon in GameObject.FindGameObjectsWithTag("FallingSword"))
         {
-            PhotonView view = weapon.GetComponent<PhotonView>();
+            var view = weapon.GetComponent<PhotonView>();
             if (view != null && view.IsMine)
-            {
                 PhotonNetwork.Destroy(weapon);
-            }
         }
     }
 
@@ -267,33 +269,29 @@ public class GameManager : MonoBehaviourPunCallbacks
         FreezeAllPlayers(false);
         DisableAllHitboxes();
 
-        pv.RPC("ConfirmReplayRequest", RpcTarget.All, PhotonNetwork.LocalPlayer.ActorNumber);
+        string key = $"ReplayReady_{PhotonNetwork.LocalPlayer.ActorNumber}";
+        PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { key, true } });
 
-        ExitGames.Client.Photon.Hashtable props = new() { { "ReplayReady", true } };
-        PhotonNetwork.CurrentRoom.SetCustomProperties(props);
+        localReplayRequested = true;
+        replayRequestTime = PhotonNetwork.Time;
+        StartCoroutine(WaitForOtherReplayOrExit());
     }
 
     void OnClickExit()
     {
         AfterMatchPanel.SetActive(false);
         PhotonNetwork.LeaveRoom();
-        PhotonNetwork.LoadLevel("LobbyScene");
     }
 
-    [PunRPC]
-    void ConfirmReplayRequest(int actorId)
+    public override void OnLeftRoom()
     {
-        if (!replayConfirmed)
-        {
-            replayConfirmed = true;
-            replayRequestTime = PhotonNetwork.Time;
-            StartCoroutine(WaitForOtherReplayOrExit());
-        }
+        PhotonNetwork.LoadLevel("LobbyScene");
     }
 
     IEnumerator WaitForOtherReplayOrExit()
     {
         float timeout = 5f;
+
         while (PhotonNetwork.Time < replayRequestTime + timeout)
         {
             if (PhotonNetwork.CurrentRoom.PlayerCount == 2 && AllPlayersConfirmedReplay())
@@ -301,29 +299,48 @@ public class GameManager : MonoBehaviourPunCallbacks
                 ExecuteReplay();
                 yield break;
             }
+
+            if (localReplayRequested)
+            {
+                float remaining = (float)(replayRequestTime + timeout - PhotonNetwork.Time);
+                exitCountdownText.text = $"자동 나가기까지 {Mathf.CeilToInt(remaining)}초...";
+            }
+
             yield return null;
         }
+
+        exitCountdownText.text = "";
         OnClickExit();
     }
 
     bool AllPlayersConfirmedReplay()
     {
-        return PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("ReplayReady") &&
-               (bool)PhotonNetwork.CurrentRoom.CustomProperties["ReplayReady"];
+        foreach (var player in PhotonNetwork.PlayerList)
+        {
+            string key = $"ReplayReady_{player.ActorNumber}";
+            if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key) ||
+                !(bool)PhotonNetwork.CurrentRoom.CustomProperties[key])
+                return false;
+        }
+        return true;
     }
 
     void ExecuteReplay()
     {
         replayConfirmed = false;
-        PhotonNetwork.CurrentRoom.SetCustomProperties(new() { { "ReplayReady", false } });
-
-        scores[0] = 0;
-        scores[1] = 0;
         matchOver = false;
         isFirstRound = true;
         resultText.text = "";
         countdownText.text = "";
-        AfterMatchPanel.SetActive(false);
+        exitCountdownText.text = "";
+        AfterMatchPanel?.SetActive(false);
+        scores[0] = 0;
+        scores[1] = 0;
+
+        var keys = new ExitGames.Client.Photon.Hashtable();
+        foreach (var p in PhotonNetwork.PlayerList)
+            keys[$"ReplayReady_{p.ActorNumber}"] = false;
+        PhotonNetwork.CurrentRoom.SetCustomProperties(keys);
 
         foreach (var player in FindObjectsOfType<PlayerController>())
         {
@@ -333,19 +350,17 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         FreezeAllPlayers(false);
         DisableAllHitboxes();
-
         UpdateScoreUI();
         StartInitialCountdown();
     }
 
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
-        bool replayDone = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey("ReplayReady") &&
-                          (bool)PhotonNetwork.CurrentRoom.CustomProperties["ReplayReady"];
+        string key = $"ReplayReady_{newPlayer.ActorNumber}";
+        bool replayDone = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key) &&
+                          (bool)PhotonNetwork.CurrentRoom.CustomProperties[key];
 
         if (matchOver && !replayDone && PhotonNetwork.LocalPlayer.ActorNumber == newPlayer.ActorNumber)
-        {
-            AfterMatchPanel.SetActive(true);
-        }
+            AfterMatchPanel?.SetActive(true);
     }
 }

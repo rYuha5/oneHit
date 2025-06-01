@@ -6020,6 +6020,7 @@ MonoBehaviour:
   fastFallSpeed: 40
   attackCooldown: 0.5
   pv: {fileID: -5216890596959515434}
+  rb: {fileID: 0}
   spumPrefab: {fileID: 495160998520478165}
   swordController: {fileID: 5532189008074090347}
   sword: {fileID: 1610814998686741706}
