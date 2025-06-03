@@ -31,6 +31,9 @@ public class GameManager : MonoBehaviourPunCallbacks
     private double replayRequestTime = 0;
     private bool localReplayRequested = false;
 
+    public GameObject arrowPrefab; // 인스펙터에서 할당
+    private GameObject localArrow; // 인스턴스화된 화살표
+
     void Awake()
     {
         Instance = this;
@@ -59,6 +62,14 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         Vector3 spawnPos = GetSpawnPosition(PhotonNetwork.LocalPlayer);
         localPlayer = PhotonNetwork.Instantiate("knight", spawnPos, Quaternion.identity);
+        if (arrowPrefab != null)
+        {
+            localArrow = Instantiate(arrowPrefab);
+            Arrow follower = localArrow.GetComponent<Arrow>();
+            if (follower != null)
+                follower.target = localPlayer.transform;
+        }
+
     }
 
     IEnumerator WaitForSecondPlayer()
@@ -319,7 +330,7 @@ public class GameManager : MonoBehaviourPunCallbacks
             if (localReplayRequested)
             {
                 float remaining = (float)(replayRequestTime + timeout - PhotonNetwork.Time);
-                exitCountdownText.text = $"자동 나가기까지 {Mathf.CeilToInt(remaining)}초...";
+                exitCountdownText.text = $"상대 입력까지 대기.. {Mathf.CeilToInt(remaining)}초";
             }
 
             yield return null;
