@@ -141,15 +141,17 @@ public class GameManager : MonoBehaviourPunCallbacks
         FreezeAllPlayers(true);
         DisableAllHitboxes();
 
+        string winnerName = PhotonNetwork.PlayerList[winnerId].NickName;
+
         if (scores[winnerId] >= roundToWin)
         {
             matchOver = true;
-            pv.RPC("ShowRoundResult", RpcTarget.All, $"PLAYER {winnerId + 1} WINS THE MATCH!");
+            pv.RPC("ShowRoundResult", RpcTarget.All, $"{winnerName} WINS THE MATCH!");
             EndMatch();
         }
         else
         {
-            pv.RPC("ShowRoundResult", RpcTarget.All, $"PLAYER {winnerId + 1} wins the round!");
+            pv.RPC("ShowRoundResult", RpcTarget.All, $"{winnerName} wins the round!");
         }
 
         StartCoroutine(NextRoundAfterDelay());
@@ -175,8 +177,18 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     void UpdateScoreUI()
     {
-        scoreTextP1.text = $"P1: {scores[0]}";
-        scoreTextP2.text = $"P2: {scores[1]}";
+        Player[] players = PhotonNetwork.PlayerList;
+
+        if (players.Length >= 2)
+        {
+            scoreTextP1.text = $"{players[0].NickName}: {scores[0]}";
+            scoreTextP2.text = $"{players[1].NickName}: {scores[1]}";
+        }
+        else if (players.Length == 1)
+        {
+            scoreTextP1.text = $"{players[0].NickName}: {scores[0]}";
+            scoreTextP2.text = "대기 중...";
+        }
     }
 
     [PunRPC] void ShowRoundResult(string msg) => resultText.text = msg;
@@ -261,11 +273,14 @@ public class GameManager : MonoBehaviourPunCallbacks
         yield return new WaitForSeconds(delay);
         resultText.text = "";
         AfterMatchPanel?.SetActive(true);
+        StartCoroutine(AutoExitIfNoResponse());
     }
 
     void OnClickReplay()
     {
         AfterMatchPanel.SetActive(false);
+        countdownText.gameObject.SetActive(false); // 입력 대기 텍스트 끄기
+
         FreezeAllPlayers(false);
         DisableAllHitboxes();
 
@@ -280,6 +295,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     void OnClickExit()
     {
         AfterMatchPanel.SetActive(false);
+        countdownText.gameObject.SetActive(false); // 입력 대기 텍스트 끄기
         PhotonNetwork.LeaveRoom();
     }
 
@@ -362,5 +378,52 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         if (matchOver && !replayDone && PhotonNetwork.LocalPlayer.ActorNumber == newPlayer.ActorNumber)
             AfterMatchPanel?.SetActive(true);
+    }
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        if (!matchOver && PhotonNetwork.CurrentRoom.PlayerCount < 2)
+        {
+            StartCoroutine(AutoLeaveDueToPlayerExit());
+        }
+    }
+
+    IEnumerator AutoLeaveDueToPlayerExit()
+    {
+        float countdown = 5f;
+
+        while (countdown > 0f)
+        {
+            exitCountdownText.text = $"상대가 나갔습니다. {Mathf.CeilToInt(countdown)}초 후 로비로 이동합니다...";
+            yield return new WaitForSeconds(1f);
+            countdown -= 1f;
+        }
+
+        PhotonNetwork.LeaveRoom();
+    }
+
+    IEnumerator AutoExitIfNoResponse()
+    {
+        float waitTime = 5f;
+        float elapsed = 0f;
+
+        countdownText.gameObject.SetActive(true);
+
+        while (elapsed < waitTime)
+        {
+            if (!AfterMatchPanel.activeSelf) // 사용자가 Replay 또는 Exit을 눌러 패널이 닫힌 경우
+            {
+                countdownText.gameObject.SetActive(false);
+                yield break;
+            }
+
+            float remaining = waitTime - elapsed;
+            countdownText.text = $"입력 대기 중... {Mathf.CeilToInt(remaining)}";
+            yield return new WaitForSeconds(1f);
+            elapsed += 1f;
+        }
+
+        countdownText.gameObject.SetActive(false);
+        PhotonNetwork.LeaveRoom();
     }
 }
