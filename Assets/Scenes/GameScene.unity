@@ -2063,7 +2063,7 @@ MonoBehaviour:
   replayButton: {fileID: 1178169791}
   exitButton: {fileID: 786270579}
   arrowPrefab: {fileID: 390012168931681187, guid: ba31b7c97e60e0c41a1e3b438ef76afa, type: 3}
-  roundToWin: 1
+  roundToWin: 3
   roundTimerText: {fileID: 2064444941}
 --- !u!114 &1323905961
 MonoBehaviour:
