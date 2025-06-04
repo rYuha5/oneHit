@@ -50,7 +50,15 @@ public class LobbyUIManager : MonoBehaviourPunCallbacks
     {
         Debug.Log("Connected to Photon Master");
         connectingPanel.SetActive(false);
-        nicknamePanel.SetActive(true); // 닉네임 입력창 표시
+
+        if (string.IsNullOrEmpty(PhotonNetwork.NickName))
+        {
+            nicknamePanel.SetActive(true);  // 닉네임 입력 안했으면 보여줌
+        }
+        else
+        {
+            PhotonNetwork.JoinLobby();      // 이미 닉네임 있으면 바로 로비로
+        }
     }
 
     public override void OnJoinedLobby()

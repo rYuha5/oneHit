@@ -18,7 +18,10 @@ public class GameManager : MonoBehaviourPunCallbacks
     public Button replayButton;
     public Button exitButton;
 
+    public GameObject arrowPrefab;
+
     private GameObject localPlayer;
+    private GameObject localArrow;
     private PhotonView pv;
 
     public int roundToWin = 3;
@@ -26,11 +29,14 @@ public class GameManager : MonoBehaviourPunCallbacks
     private bool isFirstRound = true;
     private bool matchOver = false;
 
-    private double replayRequestTime = 0;
     private bool localReplayRequested = false;
+    private double replayRequestTime = 0;
+    private Coroutine countdownDisplayCoroutine = null;
 
-    public GameObject arrowPrefab;
-    private GameObject localArrow;
+    public Text roundTimerText;
+    private Coroutine roundTimerCoroutine;
+    private float roundTimeLimit = 60f;
+
 
     void Awake()
     {
@@ -42,6 +48,9 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         resultText.text = "";
         countdownText.text = "";
+        resultText.text = "";
+        AfterMatchPanel?.SetActive(false);
+        roundTimerText.gameObject.SetActive(false);
 
         if (PhotonNetwork.IsConnected)
             SpawnImmediately();
@@ -51,15 +60,23 @@ public class GameManager : MonoBehaviourPunCallbacks
         else
             StartInitialCountdown();
 
-        AfterMatchPanel?.SetActive(false);
         replayButton.onClick.AddListener(OnClickReplay);
         exitButton.onClick.AddListener(OnClickExit);
+    }
+
+    void Update()
+    {
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            PhotonNetwork.LeaveRoom();
+        }
     }
 
     void SpawnImmediately()
     {
         Vector3 spawnPos = GetSpawnPosition(PhotonNetwork.LocalPlayer);
         localPlayer = PhotonNetwork.Instantiate("knight", spawnPos, Quaternion.identity);
+
         if (arrowPrefab != null)
         {
             localArrow = Instantiate(arrowPrefab);
@@ -116,9 +133,10 @@ public class GameManager : MonoBehaviourPunCallbacks
         controller.isFrozen = true;
         controller.enabled = false;
 
-        countdownText.gameObject.SetActive(true);
         int countdownTime = isFirstRound ? 5 : 3;
         double endTime = startTime + countdownTime;
+
+        countdownText.gameObject.SetActive(true);
 
         while (PhotonNetwork.Time < endTime)
         {
@@ -136,6 +154,49 @@ public class GameManager : MonoBehaviourPunCallbacks
         controller.isFrozen = false;
         controller.enabled = true;
         isFirstRound = false;
+
+        if (roundTimerCoroutine != null)
+            StopCoroutine(roundTimerCoroutine);
+        roundTimerCoroutine = StartCoroutine(RoundTimer());
+    }
+
+    IEnumerator RoundTimer()
+    {
+        float timeLeft = roundTimeLimit;
+        roundTimerText.gameObject.SetActive(true); // 여기도 있음
+
+        while (timeLeft > 0f && !matchOver)
+        {
+            roundTimerText.text = $"시간: {Mathf.CeilToInt(timeLeft)}초";
+            yield return new WaitForSeconds(1f);
+            timeLeft -= 1f;
+        }
+
+        if (!matchOver)
+            HandleDraw();
+    }
+
+    void HandleDraw()
+    {
+        matchOver = true;
+        roundTimerText.gameObject.SetActive(false);
+
+        scores[0]++;
+        scores[1]++;
+        UpdateScoreUI();
+
+        bool bothAtMatchPoint = scores[0] >= roundToWin && scores[1] >= roundToWin;
+
+        if (bothAtMatchPoint)
+        {
+            pv.RPC("ShowRoundResult", RpcTarget.All, "무승부! 두 플레이어 모두 매치포인트입니다.");
+            EndMatch(); // AfterMatchPanel로 이동
+        }
+        else
+        {
+            pv.RPC("ShowRoundResult", RpcTarget.All, "무승부! 다음 라운드로 진행됩니다.");
+            StartCoroutine(NextRoundAfterDelay());
+        }
     }
 
     [PunRPC]
@@ -163,6 +224,11 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
 
         StartCoroutine(NextRoundAfterDelay());
+        if (roundTimerCoroutine != null)
+        {
+            StopCoroutine(roundTimerCoroutine);
+            roundTimerText.gameObject.SetActive(false);
+        }
     }
 
     IEnumerator NextRoundAfterDelay()
@@ -283,8 +349,6 @@ public class GameManager : MonoBehaviourPunCallbacks
     void OnClickReplay()
     {
         AfterMatchPanel.SetActive(false);
-        countdownText.gameObject.SetActive(false);
-
         FreezeAllPlayers(false);
         DisableAllHitboxes();
 
@@ -305,7 +369,6 @@ public class GameManager : MonoBehaviourPunCallbacks
     void OnClickExit()
     {
         AfterMatchPanel.SetActive(false);
-        countdownText.gameObject.SetActive(false);
         PhotonNetwork.LeaveRoom();
     }
 
@@ -317,17 +380,8 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         if (PhotonNetwork.CurrentRoom.PlayerCount == 1)
         {
-            float countdown = 3f;
-            countdownText.gameObject.SetActive(true);
-
-            while (countdown > 0f)
-            {
-                countdownText.text = $"상대 없음... {Mathf.CeilToInt(countdown)}초 후 나감";
-                yield return new WaitForSeconds(1f);
-                countdown -= 1f;
-            }
-
-            // 텍스트 유지한 채 나가기
+            StartCountdownText("상대 없음... 나가는 중", 3f);
+            yield return new WaitForSeconds(3f);
             PhotonNetwork.LeaveRoom();
             yield break;
         }
@@ -344,7 +398,8 @@ public class GameManager : MonoBehaviourPunCallbacks
         }
 
         double expire = maxTime + timeout;
-        countdownText.gameObject.SetActive(true);
+        float remaining = (float)(expire - PhotonNetwork.Time);
+        StartCountdownText("상대 입력 대기...", remaining);
 
         while (PhotonNetwork.Time < expire)
         {
@@ -354,8 +409,6 @@ public class GameManager : MonoBehaviourPunCallbacks
                 ExecuteReplay();
                 yield break;
             }
-
-            countdownText.text = $"상대 입력 대기... {Mathf.CeilToInt((float)(expire - PhotonNetwork.Time))}초";
             yield return null;
         }
 
@@ -428,41 +481,50 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     IEnumerator AutoLeaveDueToPlayerExit()
     {
-        float countdown = 5f;
-        countdownText.gameObject.SetActive(true);
-
-        while (countdown > 0f)
-        {
-            countdownText.text = $"상대 나감. {Mathf.CeilToInt(countdown)}초 후 나감";
-            yield return new WaitForSeconds(1f);
-            countdown -= 1f;
-        }
-
-        countdownText.gameObject.SetActive(false);
+        StartCountdownText("상대 나감...", 5f);
+        yield return new WaitForSeconds(5f);
         PhotonNetwork.LeaveRoom();
     }
 
     IEnumerator AutoExitIfNoResponse()
     {
         float wait = 5f;
-        float elapsed = 0f;
+        StartCountdownText("입력 대기 중...", wait);
 
+        yield return new WaitForSeconds(wait);
+
+        if (AfterMatchPanel.activeSelf)
+            PhotonNetwork.LeaveRoom();
+    }
+
+    public void StartCountdownText(string baseMessage, float duration, bool autoHide = true)
+    {
+        if (countdownDisplayCoroutine != null)
+            StopCoroutine(countdownDisplayCoroutine);
+
+        countdownDisplayCoroutine = StartCoroutine(CountdownTextRoutine(baseMessage, duration, autoHide));
+    }
+
+    private IEnumerator CountdownTextRoutine(string baseMessage, float duration, bool autoHide)
+    {
         countdownText.gameObject.SetActive(true);
 
-        while (elapsed < wait)
+        float remaining = duration;
+        while (remaining > 0f)
         {
-            if (!AfterMatchPanel.activeSelf)
-            {
-                countdownText.gameObject.SetActive(false);
-                yield break;
-            }
+            string text = string.IsNullOrEmpty(baseMessage)
+                ? Mathf.CeilToInt(remaining).ToString()
+                : $"{baseMessage} {Mathf.CeilToInt(remaining)}초";
 
-            countdownText.text = $"입력 대기 중... {Mathf.CeilToInt(wait - elapsed)}초";
+            countdownText.text = text;
+
             yield return new WaitForSeconds(1f);
-            elapsed += 1f;
+            remaining -= 1f;
         }
 
-        countdownText.gameObject.SetActive(false);
-        PhotonNetwork.LeaveRoom();
+        if (autoHide)
+            countdownText.gameObject.SetActive(false);
+
+        countdownDisplayCoroutine = null;
     }
 }
