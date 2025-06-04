@@ -13,7 +13,6 @@ public class GameManager : MonoBehaviourPunCallbacks
     public Text scoreTextP2;
     public Text resultText;
     public Text countdownText;
-    public Text exitCountdownText;
 
     public GameObject AfterMatchPanel;
     public Button replayButton;
@@ -27,12 +26,11 @@ public class GameManager : MonoBehaviourPunCallbacks
     private bool isFirstRound = true;
     private bool matchOver = false;
 
-    private bool replayConfirmed = false;
     private double replayRequestTime = 0;
     private bool localReplayRequested = false;
 
-    public GameObject arrowPrefab; // 인스펙터에서 할당
-    private GameObject localArrow; // 인스턴스화된 화살표
+    public GameObject arrowPrefab;
+    private GameObject localArrow;
 
     void Awake()
     {
@@ -43,7 +41,7 @@ public class GameManager : MonoBehaviourPunCallbacks
     void Start()
     {
         resultText.text = "";
-        exitCountdownText.text = "";
+        countdownText.text = "";
 
         if (PhotonNetwork.IsConnected)
             SpawnImmediately();
@@ -69,7 +67,6 @@ public class GameManager : MonoBehaviourPunCallbacks
             if (follower != null)
                 follower.target = localPlayer.transform;
         }
-
     }
 
     IEnumerator WaitForSecondPlayer()
@@ -90,7 +87,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
         if (PhotonNetwork.IsMasterClient)
         {
-            double startTime = PhotonNetwork.Time + 1.0;
+            double startTime = PhotonNetwork.Time;
             pv.RPC("StartCountdownRPC", RpcTarget.All, startTime);
         }
     }
@@ -105,10 +102,10 @@ public class GameManager : MonoBehaviourPunCallbacks
     [PunRPC]
     void StartCountdownRPC(double startTime)
     {
-        StartCoroutine(CountdownRouine(startTime));
+        StartCoroutine(CountdownRoutine(startTime));
     }
 
-    IEnumerator CountdownRouine(double startTime)
+    IEnumerator CountdownRoutine(double startTime)
     {
         var controller = localPlayer.GetComponent<PlayerController>();
         var rb = localPlayer.GetComponent<Rigidbody2D>();
@@ -188,8 +185,7 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     void UpdateScoreUI()
     {
-        Player[] players = PhotonNetwork.PlayerList;
-
+        var players = PhotonNetwork.PlayerList;
         if (players.Length >= 2)
         {
             scoreTextP1.text = $"{players[0].NickName}: {scores[0]}";
@@ -244,25 +240,22 @@ public class GameManager : MonoBehaviourPunCallbacks
         foreach (var p in GameObject.FindGameObjectsWithTag("Player"))
         {
             PhotonView view = p.GetComponent<PhotonView>();
-            if (view != null)
-            {
-                Vector3 spawnPos = GetSpawnPosition(view.Owner);
-                var rb = p.GetComponent<Rigidbody2D>();
-                rb.velocity = Vector2.zero;
-                rb.isKinematic = true;
-                rb.gravityScale = 0;
-                view.RPC("ForceSetPositionRPC", RpcTarget.All, spawnPos.x, spawnPos.y);
-            }
+            Vector3 spawnPos = GetSpawnPosition(view.Owner);
+            var rb = p.GetComponent<Rigidbody2D>();
+            rb.velocity = Vector2.zero;
+            rb.isKinematic = true;
+            rb.gravityScale = 0;
+            view.RPC("ForceSetPositionRPC", RpcTarget.All, spawnPos.x, spawnPos.y);
         }
     }
 
     void DestroyAllDroppedWeapons()
     {
-        foreach (var weapon in GameObject.FindGameObjectsWithTag("FallingSword"))
+        foreach (var obj in GameObject.FindGameObjectsWithTag("FallingSword"))
         {
-            var view = weapon.GetComponent<PhotonView>();
+            var view = obj.GetComponent<PhotonView>();
             if (view != null && view.IsMine)
-                PhotonNetwork.Destroy(weapon);
+                PhotonNetwork.Destroy(obj);
         }
     }
 
@@ -270,10 +263,10 @@ public class GameManager : MonoBehaviourPunCallbacks
     {
         if (!matchOver) return;
 
-        foreach (var player in FindObjectsOfType<PlayerController>())
+        foreach (var p in FindObjectsOfType<PlayerController>())
         {
-            player.isFrozen = true;
-            player.rb.velocity = Vector2.zero;
+            p.isFrozen = true;
+            p.rb.velocity = Vector2.zero;
         }
 
         StartCoroutine(ShowAfterMatchPanelWithDelay(2f));
@@ -290,61 +283,91 @@ public class GameManager : MonoBehaviourPunCallbacks
     void OnClickReplay()
     {
         AfterMatchPanel.SetActive(false);
-        countdownText.gameObject.SetActive(false); // 입력 대기 텍스트 끄기
+        countdownText.gameObject.SetActive(false);
 
         FreezeAllPlayers(false);
         DisableAllHitboxes();
 
-        string key = $"ReplayReady_{PhotonNetwork.LocalPlayer.ActorNumber}";
-        PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable { { key, true } });
+        string keyReady = $"ReplayReady_{PhotonNetwork.LocalPlayer.ActorNumber}";
+        string keyTime = $"ReplayTime_{PhotonNetwork.LocalPlayer.ActorNumber}";
+        double now = PhotonNetwork.Time;
+
+        PhotonNetwork.CurrentRoom.SetCustomProperties(new ExitGames.Client.Photon.Hashtable {
+            { keyReady, true },
+            { keyTime, now }
+        });
 
         localReplayRequested = true;
-        replayRequestTime = PhotonNetwork.Time;
+        replayRequestTime = now;
         StartCoroutine(WaitForOtherReplayOrExit());
     }
 
     void OnClickExit()
     {
         AfterMatchPanel.SetActive(false);
-        countdownText.gameObject.SetActive(false); // 입력 대기 텍스트 끄기
+        countdownText.gameObject.SetActive(false);
         PhotonNetwork.LeaveRoom();
     }
 
-    public override void OnLeftRoom()
-    {
-        PhotonNetwork.LoadLevel("LobbyScene");
-    }
+    public override void OnLeftRoom() => PhotonNetwork.LoadLevel("LobbyScene");
 
     IEnumerator WaitForOtherReplayOrExit()
     {
         float timeout = 5f;
 
-        while (PhotonNetwork.Time < replayRequestTime + timeout)
+        if (PhotonNetwork.CurrentRoom.PlayerCount == 1)
+        {
+            float countdown = 3f;
+            countdownText.gameObject.SetActive(true);
+
+            while (countdown > 0f)
+            {
+                countdownText.text = $"상대 없음... {Mathf.CeilToInt(countdown)}초 후 나감";
+                yield return new WaitForSeconds(1f);
+                countdown -= 1f;
+            }
+
+            // 텍스트 유지한 채 나가기
+            PhotonNetwork.LeaveRoom();
+            yield break;
+        }
+
+        double maxTime = replayRequestTime;
+        foreach (var p in PhotonNetwork.PlayerList)
+        {
+            string key = $"ReplayTime_{p.ActorNumber}";
+            if (PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key))
+            {
+                double t = (double)PhotonNetwork.CurrentRoom.CustomProperties[key];
+                if (t > maxTime) maxTime = t;
+            }
+        }
+
+        double expire = maxTime + timeout;
+        countdownText.gameObject.SetActive(true);
+
+        while (PhotonNetwork.Time < expire)
         {
             if (PhotonNetwork.CurrentRoom.PlayerCount == 2 && AllPlayersConfirmedReplay())
             {
+                countdownText.gameObject.SetActive(false);
                 ExecuteReplay();
                 yield break;
             }
 
-            if (localReplayRequested)
-            {
-                float remaining = (float)(replayRequestTime + timeout - PhotonNetwork.Time);
-                exitCountdownText.text = $"상대 입력까지 대기.. {Mathf.CeilToInt(remaining)}초";
-            }
-
+            countdownText.text = $"상대 입력 대기... {Mathf.CeilToInt((float)(expire - PhotonNetwork.Time))}초";
             yield return null;
         }
 
-        exitCountdownText.text = "";
+        countdownText.gameObject.SetActive(false);
         OnClickExit();
     }
 
     bool AllPlayersConfirmedReplay()
     {
-        foreach (var player in PhotonNetwork.PlayerList)
+        foreach (var p in PhotonNetwork.PlayerList)
         {
-            string key = $"ReplayReady_{player.ActorNumber}";
+            string key = $"ReplayReady_{p.ActorNumber}";
             if (!PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key) ||
                 !(bool)PhotonNetwork.CurrentRoom.CustomProperties[key])
                 return false;
@@ -354,25 +377,23 @@ public class GameManager : MonoBehaviourPunCallbacks
 
     void ExecuteReplay()
     {
-        replayConfirmed = false;
         matchOver = false;
         isFirstRound = true;
-        resultText.text = "";
-        countdownText.text = "";
-        exitCountdownText.text = "";
-        AfterMatchPanel?.SetActive(false);
         scores[0] = 0;
         scores[1] = 0;
+        resultText.text = "";
+        countdownText.text = "";
+        AfterMatchPanel?.SetActive(false);
 
-        var keys = new ExitGames.Client.Photon.Hashtable();
+        var resetProps = new ExitGames.Client.Photon.Hashtable();
         foreach (var p in PhotonNetwork.PlayerList)
-            keys[$"ReplayReady_{p.ActorNumber}"] = false;
-        PhotonNetwork.CurrentRoom.SetCustomProperties(keys);
+            resetProps[$"ReplayReady_{p.ActorNumber}"] = false;
+        PhotonNetwork.CurrentRoom.SetCustomProperties(resetProps);
 
-        foreach (var player in FindObjectsOfType<PlayerController>())
+        foreach (var p in FindObjectsOfType<PlayerController>())
         {
-            player.ResetForNextRound();
-            player.isFrozen = false;
+            p.ResetForNextRound();
+            p.isFrozen = false;
         }
 
         FreezeAllPlayers(false);
@@ -384,52 +405,59 @@ public class GameManager : MonoBehaviourPunCallbacks
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
         string key = $"ReplayReady_{newPlayer.ActorNumber}";
-        bool replayDone = PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key) &&
-                          (bool)PhotonNetwork.CurrentRoom.CustomProperties[key];
-
-        if (matchOver && !replayDone && PhotonNetwork.LocalPlayer.ActorNumber == newPlayer.ActorNumber)
+        if (matchOver &&
+            PhotonNetwork.CurrentRoom.CustomProperties.ContainsKey(key) &&
+            !(bool)PhotonNetwork.CurrentRoom.CustomProperties[key] &&
+            PhotonNetwork.LocalPlayer.ActorNumber == newPlayer.ActorNumber)
+        {
             AfterMatchPanel?.SetActive(true);
+        }
     }
 
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
         if (!matchOver && PhotonNetwork.CurrentRoom.PlayerCount < 2)
-        {
             StartCoroutine(AutoLeaveDueToPlayerExit());
+
+        if (matchOver && PhotonNetwork.CurrentRoom.PlayerCount < 2)
+        {
+            PhotonNetwork.CurrentRoom.IsOpen = false;
+            PhotonNetwork.CurrentRoom.IsVisible = false;
         }
     }
 
     IEnumerator AutoLeaveDueToPlayerExit()
     {
         float countdown = 5f;
+        countdownText.gameObject.SetActive(true);
 
         while (countdown > 0f)
         {
-            exitCountdownText.text = $"상대가 나갔습니다. {Mathf.CeilToInt(countdown)}초 후 로비로 이동합니다...";
+            countdownText.text = $"상대 나감. {Mathf.CeilToInt(countdown)}초 후 나감";
             yield return new WaitForSeconds(1f);
             countdown -= 1f;
         }
 
+        countdownText.gameObject.SetActive(false);
         PhotonNetwork.LeaveRoom();
     }
 
     IEnumerator AutoExitIfNoResponse()
     {
-        float waitTime = 5f;
+        float wait = 5f;
         float elapsed = 0f;
 
         countdownText.gameObject.SetActive(true);
 
-        while (elapsed < waitTime)
+        while (elapsed < wait)
         {
-            if (!AfterMatchPanel.activeSelf) // 사용자가 Replay 또는 Exit을 눌러 패널이 닫힌 경우
+            if (!AfterMatchPanel.activeSelf)
             {
                 countdownText.gameObject.SetActive(false);
                 yield break;
             }
 
-            float remaining = waitTime - elapsed;
-            countdownText.text = $"입력 대기 중... {Mathf.CeilToInt(remaining)}";
+            countdownText.text = $"입력 대기 중... {Mathf.CeilToInt(wait - elapsed)}초";
             yield return new WaitForSeconds(1f);
             elapsed += 1f;
         }

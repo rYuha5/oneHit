@@ -8,7 +8,7 @@ public class Arrow : MonoBehaviour
     {
         if (target != null)
         {
-            Vector3 aboveHead = target.position + Vector3.up * 1.5f;
+            Vector3 aboveHead = target.position + Vector3.up * 4f;
             transform.position = aboveHead;
         }
     }
