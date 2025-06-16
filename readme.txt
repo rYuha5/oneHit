@@ -1,5 +1,5 @@
 실행 방법
-- 깃 허브에서 파일을 다운로드  -> oneHIt -> MyGameBuild -> oneHit(exe)
+- 압축 해제 후  -> oneHIt -> MyGameBuild -> oneHit(exe)
 제한 사항
 - 멀티 플레이만 구현되어 있어 한 pc에서 두 프로그램을 돌리거나 여러 pc를 사용해서 테스트 해야됨
 들어가서
